@@ -1,104 +1,93 @@
-import { KMSClient, GenerateDataKeyCommand, DecryptCommand } from "@aws-sdk/client-kms";
+const subtle = globalThis.crypto.subtle;
 
-// Initialize the AWS KMS client
-const kmsClient = new KMSClient({ region: "us-east-1" }); // Change to your region
-
-// The ARN or key ID of your Customer Master Key (CMK)
-const keyId = "arn:aws:kms:us-east-1:123456789012:key/your-cmk-id"; // Replace with your CMK ARN
-
-// Function to generate a data encryption key (DEK)
-async function generateDataEncryptionKey() {
-    const command = new GenerateDataKeyCommand({
-        KeyId: keyId,
-        KeySpec: "AES_256", // AES 256-bit key
-    });
-
-    try {
-        const data = await kmsClient.send(command);
-        return data; // Returns both Plaintext (DEK) and CiphertextBlob (encrypted DEK)
-    } catch (error) {
-        console.error("Error generating DEK:", error);
-        throw error;
-    }
+function getPasswordKey(password) {
+    const encoder = new TextEncoder();
+    return encoder.encode(password);
 }
 
-// Function to encrypt data using AES-GCM
-async function encryptData(data) {
-    const { Plaintext, CiphertextBlob } = await generateDataEncryptionKey();
+function generateSalt() {
+    const salt = new Uint8Array(16); // 16 bytes = 128 bits of salt
+    globalThis.crypto.getRandomValues(salt);
+    return salt;
+}
 
-    // Generate a random initialization vector (IV) for AES-GCM
-    const iv = crypto.getRandomValues(new Uint8Array(12)); // 12 bytes is recommended for GCM
+// const password = "HelloThere";
+// const passwordKey = getPasswordKey(password);
 
-    // Encrypt the data using the DEK and AES-GCM
-    const encoder = new TextEncoder();
-    const encodedData = encoder.encode(data);
+// console.log(password);
+// console.log(passwordKey); // Should log an Uint8Array (ArrayBuffer) of encoded password
 
-    const encryptedData = await crypto.subtle.encrypt(
+
+// const salt = generateSalt();
+// console.log(salt); // Should log a randomly generated Uint8Array
+
+
+async function deriveKey(password, salt) {
+    // Import the password as key material for PBKDF2
+    const keyMaterial = await subtle.importKey(
+        'raw', 
+        password, // ArrayBuffer from getPasswordKey
+        'PBKDF2', 
+        false, 
+        ['deriveKey']
+    );  
+
+    return subtle.deriveKey(
         {
-            name: "AES-GCM",
-            iv: iv,
+            name: 'PBKDF2',
+            salt,
+            iterations: 100000,
+            hash: 'SHA-256'
         },
-        await crypto.subtle.importKey(
-            "raw",
-            Plaintext,
-            { name: "AES-GCM" },
-            false,
-            ["encrypt"]
-        ),
-        encodedData
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        true,
+        ['encrypt', 'decrypt']
     );
 
-    return {
-        encryptedData: new Uint8Array(encryptedData),
-        encryptedDEK: CiphertextBlob, // Store the encrypted DEK for future decryption
-        iv: iv, // Store the IV with the encrypted data
-    };
 }
 
-// Function to decrypt data using AES-GCM
-async function decryptData(encryptedData, encryptedDEK, iv) {
-    // Decrypt the DEK using AWS KMS
-    const command = new DecryptCommand({
-        CiphertextBlob: encryptedDEK,
-    });
-
-    try {
-        const data = await kmsClient.send(command);
-        const plaintextDEK = data.Plaintext;
-
-        // Decrypt the data using the decrypted DEK and AES-GCM
-        const decryptedData = await crypto.subtle.decrypt(
-            {
-                name: "AES-GCM",
-                iv: iv,
-            },
-            await crypto.subtle.importKey(
-                "raw",
-                plaintextDEK,
-                { name: "AES-GCM" },
-                false,
-                ["decrypt"]
-            ),
-            encryptedData
-        );
-
-        const decoder = new TextDecoder();
-        return decoder.decode(decryptedData);
-    } catch (error) {
-        console.error("Error decrypting data:", error);
-        throw error;
-    }
+async function encryptData(key, data) {
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await subtle.encrypt(
+        {
+            name: 'AES-GCM',
+            iv
+        },
+        key,
+        data
+    );
+    return { iv, encrypted: new Uint8Array(encrypted) };
 }
 
-// Example Usage
-(async () => {
-    const password = "HelloThere";
+async function decryptData(key, iv, encryptedData) {
+    const decrypted = await subtle.decrypt(
+        {
+            name: 'AES-GCM',
+            iv: iv // Use the same IV that was used for encryption
+        },
+        key, // The AES key derived from PBKDF2
+        encryptedData // The encrypted data (ArrayBuffer)
+    );
 
-    // Encrypt the password
-    const { encryptedData, encryptedDEK, iv } = await encryptData(password);
-    console.log("Encrypted Data:", encryptedData);
+    return decrypted; // Decrypted data (ArrayBuffer)
+}
 
-    // Decrypt the password
-    const decryptedData = await decryptData(encryptedData, encryptedDEK, iv);
-    console.log("Decrypted Data:", decryptedData);
+
+
+(async function testDecrypt() {
+    const passwordKey = getPasswordKey("mySecurePassword123"); // Convert password
+    const salt = generateSalt(); // Generate salt
+    const aesKey = await deriveKey(passwordKey, salt); // Derive AES key
+
+    const encoder = new TextEncoder();
+    const data = encoder.encode("This is my secret data!"); // Convert string to ArrayBuffer
+
+    // Encrypt the data
+    const { iv, encrypted } = await encryptData(aesKey, data);
+
+    // Decrypt the data
+    const decryptedData = await decryptData(aesKey, iv, encrypted);
+    const decoder = new TextDecoder();
+    console.log(decoder.decode(decryptedData)); // Should log: "This is my secret data!"
 })();
