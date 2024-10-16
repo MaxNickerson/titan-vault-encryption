@@ -7,6 +7,7 @@
     "build": "webpack --mode production"
   },
   "dependencies": {
+    "latest-version": "^9.0.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.26.2",
