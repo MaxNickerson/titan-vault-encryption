@@ -21,12 +21,12 @@ const LandingPage = () => {
         {/* Buttons */}
         <div className="space-y-6">
           <button
-            className="w-full py-3 px-6 bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-full text-lg hover:bg-blue-700 transition"
-            onClick={handleRegisterClick}  // Handle button click
-          >
+            className="w-full py-3 px-6 bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-full text-lg transition-transform transform hover:scale-105"
+            onClick={handleRegisterClick}
+         >
             Register
           </button>
-          <button className="w-full py-3 px-6 bg-gray-500 text-white rounded-full text-lg hover:bg-gray-600 transition">
+          <button className="w-full py-3 px-6 bg-gray-500 text-white rounded-full text-lg transition-transform transform hover:scale-105">  
             Login
           </button>
         </div>
