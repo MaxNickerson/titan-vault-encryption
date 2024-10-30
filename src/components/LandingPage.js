@@ -1,11 +1,16 @@
+// src/components/LandingPage.js
 import React from 'react';
-import { useNavigate } from 'react-router-dom';  // Import useNavigate hook
+import { useNavigate } from 'react-router-dom';
 
 const LandingPage = () => {
-  const navigate = useNavigate();  // Initialize navigate function
+  const navigate = useNavigate();
 
   const handleRegisterClick = () => {
-    navigate('/register');  // Navigate to the registration page
+    navigate('/register');
+  };
+
+  const handleLoginClick = () => {
+    navigate('/login');
   };
 
   return (
@@ -23,10 +28,13 @@ const LandingPage = () => {
           <button
             className="w-full py-3 px-6 bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-full text-lg transition-transform transform hover:scale-105"
             onClick={handleRegisterClick}
-         >
+          >
             Register
           </button>
-          <button className="w-full py-3 px-6 bg-gray-500 text-white rounded-full text-lg transition-transform transform hover:scale-105">  
+          <button
+            className="w-full py-3 px-6 bg-gray-500 text-white rounded-full text-lg transition-transform transform hover:scale-105"
+            onClick={handleLoginClick}
+          >
             Login
           </button>
         </div>
