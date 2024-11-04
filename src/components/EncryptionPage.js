@@ -100,6 +100,7 @@ const EncryptionPage = () => {
         reader.readAsArrayBuffer(file);
     };
 
+    // maybe add protobuf
     const handleEncryptFile = async () => {
         if (fileData) {
             const passwordKey = getPasswordKey('mySecurePassword123'); // Convert password
