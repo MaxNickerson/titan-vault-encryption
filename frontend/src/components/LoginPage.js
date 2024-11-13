@@ -1,41 +1,43 @@
-// src/components/LoginPage.js
+// frontend/src/components/LoginPage.js
 import React, { useState } from 'react';
-import { CognitoUser, AuthenticationDetails } from 'amazon-cognito-identity-js';
-import UserPool from '../cognitoConfig';
+import { useNavigate } from 'react-router-dom';
+// import { CognitoUser, AuthenticationDetails } from 'amazon-cognito-identity-js';
+// import UserPool from '../cognitoConfig';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  // const [successMessage, setSuccessMessage] = useState('');
 
-  const handleLogin = (e) => {
+  const navigate = useNavigate();
+
+  const handleLogin = async (e) => {
     e.preventDefault();
 
-    const user = new CognitoUser({
-      Username: email,
-      Pool: UserPool,
-    });
+    try {
+      const response = await fetch('http://localhost:8080/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies in the request
+        body: JSON.stringify({ email, password }),
+      });
 
-    const authDetails = new AuthenticationDetails({
-      Username: email,
-      Password: password,
-    });
-
-    user.authenticateUser(authDetails, {
-      onSuccess: (result) => {
-        const accessToken = result.getAccessToken().getJwtToken();
-        console.log('Login successful! Access Token:', accessToken);
-        setSuccessMessage('Login successful!');
-        setErrorMessage('');
-        // Redirect to a protected route or dashboard here
-      },
-      onFailure: (err) => {
-        setErrorMessage(err.message || JSON.stringify(err));
-        setSuccessMessage('');
-      },
-    });
+      if (response.ok) {
+        // Handle successful login
+        navigate('/encryption');
+        // Redirect to a protected route or update the UI
+      } else {
+        const errorText = await response.text();
+        setErrorMessage(errorText);
+      }
+    } catch (error) {
+      setErrorMessage('An error occurred during login');
+    }
   };
+
 
   return (
     <div className="flex h-screen">
@@ -87,9 +89,7 @@ const LoginPage = () => {
 
         {/* Error and Success Messages */}
         {errorMessage && <p className="text-red-500 mt-4">{errorMessage}</p>}
-        {successMessage && (
-          <p className="text-green-500 mt-4">{successMessage}</p>
-        )}
+        
 
         {/* Register Link */}
         <p className="text-gray-500 mt-4">
