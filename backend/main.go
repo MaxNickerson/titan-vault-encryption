@@ -46,10 +46,7 @@ func enableCors(next http.Handler) http.Handler {
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	// if r.Method != http.MethodGet {
-	// 	http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
-	// 	return
-	// }
+	// fmt.Println("Hello")
 
 	var credentials struct {
 		Email    string `json:"email"`
@@ -61,7 +58,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-
+	// fmt.Println(credentials) // passes credentials fine
 	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(r.Context())
 	if err != nil {
@@ -81,7 +78,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			"PASSWORD": credentials.Password,
 		},
 	}
-
+	// fmt.Println(input)
 	result, err := client.InitiateAuth(r.Context(), input)
 	if err != nil {
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
