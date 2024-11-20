@@ -5,6 +5,8 @@ import RegistrationPage from './components/RegistrationPage';
 import LoginPage from './components/LoginPage';
 import ConfirmationPage from './components/ConfirmationPage';
 import EncryptionPage from './components/EncryptionPage';
+import DashboardPage from './components/DashboardPage';
+import ViewFilesPage from './components/ViewFilesPage';
 
 const App = () => {
   return (
@@ -15,6 +17,9 @@ const App = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/confirm" element={<ConfirmationPage />} />
         <Route path="/encryption" element={<EncryptionPage />} />
+        <Route path="/dashboard" element={<DashboardPage username="YourUsername" />} />
+        <Route path="/view-files" element={<ViewFilesPage />} />
+
         {/* Add other routes as needed */}
       </Routes>
     </Router>

@@ -1,56 +1,54 @@
 // src/components/ConfirmationPage.js
 import React, { useState } from 'react';
-import { CognitoUser } from 'amazon-cognito-identity-js';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import UserPool from '../cognitoConfig';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { CognitoUser } from 'amazon-cognito-identity-js';
 
 const ConfirmationPage = () => {
-  const [otp, setOtp] = useState('');
+  const [confirmationCode, setConfirmationCode] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email;
-
-  if (!email) {
-    // If email is not provided, redirect to registration
-    navigate('/register');
-  }
+  const email = location.state?.email || '';
+  const userId = location.state?.userId || '';
 
   const handleConfirm = (e) => {
     e.preventDefault();
 
-    const user = new CognitoUser({
+    const userData = {
       Username: email,
       Pool: UserPool,
-    });
+    };
 
-    user.confirmRegistration(otp, true, (err, result) => {
+    const cognitoUser = new CognitoUser(userData);
+
+    cognitoUser.confirmRegistration(confirmationCode, true, (err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));
-        setSuccessMessage('');
         return;
       }
-      setSuccessMessage('Your account has been verified!');
-      setErrorMessage('');
-      // Optionally redirect to login or dashboard
+      setSuccessMessage('Account confirmed successfully!');
+      // Navigate to login page or dashboard
       navigate('/login');
     });
   };
 
   const handleResendCode = () => {
-    const user = new CognitoUser({
+    const userData = {
       Username: email,
       Pool: UserPool,
-    });
+    };
 
-    user.resendConfirmationCode((err, result) => {
+    const cognitoUser = new CognitoUser(userData);
+
+    cognitoUser.resendConfirmationCode((err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));
         return;
       }
-      setSuccessMessage('Verification code resent successfully.');
+      setSuccessMessage('Confirmation code resent successfully!');
     });
   };
 
@@ -61,25 +59,28 @@ const ConfirmationPage = () => {
 
       {/* Right section with form */}
       <div className="w-1/2 flex flex-col items-center justify-center bg-white p-8">
-        {/* Title */}
+        {/* Logo or Title */}
         <h1 className="text-4xl font-bold text-gray-800 mb-6">Titan Vault</h1>
 
         {/* Form Section */}
         <h2 className="text-2xl font-semibold text-gray-700 mb-4">
-          Verify Your Account
+          Confirm Your Account
         </h2>
+        <p className="text-gray-500 mb-2">
+          We've sent a confirmation code to your email: <strong>{email}</strong>
+        </p>
         <p className="text-gray-500 mb-6">
-          Please enter the verification code sent to your email.
+          Your User ID is: <strong>{userId}</strong>
         </p>
 
         <form onSubmit={handleConfirm} className="w-full">
-          {/* OTP Input */}
+          {/* Confirmation Code Input */}
           <input
             type="text"
-            placeholder="Verification Code"
+            placeholder="Confirmation Code"
             className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
+            value={confirmationCode}
+            onChange={(e) => setConfirmationCode(e.target.value)}
             required
           />
 
@@ -92,19 +93,27 @@ const ConfirmationPage = () => {
           </button>
         </form>
 
-        {/* Resend Code */}
-        <button
-          onClick={handleResendCode}
-          className="mt-4 text-blue-500 hover:underline"
-        >
-          Resend Verification Code
-        </button>
+        {/* Resend Code Link */}
+        <p className="text-gray-500 mt-4">
+          Didn't receive a code?{' '}
+          <button onClick={handleResendCode} className="text-blue-500">
+            Resend Code
+          </button>
+        </p>
 
-        {/* Error and Success Messages */}
+        {/* Success Message */}
+        {successMessage && <p className="text-green-500 mt-4">{successMessage}</p>}
+
+        {/* Error Message */}
         {errorMessage && <p className="text-red-500 mt-4">{errorMessage}</p>}
-        {successMessage && (
-          <p className="text-green-500 mt-4">{successMessage}</p>
-        )}
+
+        {/* Back to Login Link */}
+        <p className="text-gray-500 mt-4">
+          Back to{' '}
+          <Link to="/login" className="text-blue-500">
+            Login
+          </Link>
+        </p>
       </div>
     </div>
   );

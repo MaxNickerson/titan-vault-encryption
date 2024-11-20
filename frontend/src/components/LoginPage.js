@@ -27,7 +27,7 @@ const LoginPage = () => {
 
       if (response.ok) {
         // Handle successful login
-        navigate('/encryption');
+        navigate('/dashboard');
         // Redirect to a protected route or update the UI
       } else {
         const errorText = await response.text();

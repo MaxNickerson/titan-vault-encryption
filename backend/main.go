@@ -1,4 +1,3 @@
-// main.go
 package main
 
 import (
@@ -8,7 +7,6 @@ import (
 	"net/http"
 	"os"
 
-	// "os"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
@@ -16,17 +14,16 @@ import (
 )
 
 func main() {
-
+	// Load environment variables
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatalf("Error loading .env file")
+		log.Fatalf("Error loading .env file: %v", err)
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", loginHandler)
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
-
 }
 
 func enableCors(next http.Handler) http.Handler {
@@ -46,8 +43,9 @@ func enableCors(next http.Handler) http.Handler {
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	// fmt.Println("Hello")
+	log.Println("Handling login request")
 
+	// Parse request body for credentials
 	var credentials struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -55,13 +53,17 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&credentials)
 	if err != nil {
+		log.Printf("Invalid request body: %v\n", err)
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	// fmt.Println(credentials) // passes credentials fine
+
+	log.Printf("Attempting login for user: %s\n", credentials.Email)
+
 	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(r.Context())
 	if err != nil {
+		log.Printf("Failed to load AWS config: %v\n", err)
 		http.Error(w, "Failed to load AWS config", http.StatusInternalServerError)
 		return
 	}
@@ -69,7 +71,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	// Create Cognito client
 	client := cognitoidentityprovider.NewFromConfig(cfg)
 
-	// Authenticate user with Cognito
+	// Set up Cognito authentication input
 	input := &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: "USER_PASSWORD_AUTH",
 		ClientId: aws.String(os.Getenv("COGNITO_CLIENT_ID")),
@@ -78,24 +80,31 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 			"PASSWORD": credentials.Password,
 		},
 	}
-	// fmt.Println(input)
+
+	// Log input (except sensitive fields) for debugging
+	log.Printf("Cognito auth input prepared for user: %s\n", credentials.Email)
+
+	// Authenticate user with Cognito
 	result, err := client.InitiateAuth(r.Context(), input)
 	if err != nil {
+		log.Printf("Cognito authentication failed: %v\n", err)
 		http.Error(w, "Authentication failed", http.StatusUnauthorized)
 		return
 	}
+
+	log.Println("Authentication successful")
 
 	// Set HTTP-only cookie with the access token
 	http.SetCookie(w, &http.Cookie{
 		Name:     "access_token",
 		Value:    *result.AuthenticationResult.AccessToken,
 		HttpOnly: true,
-		Secure:   false, // Ensure this is true in production (requires HTTPS)
+		Secure:   false, // Change to true in production with HTTPS
 		Path:     "/",
 		MaxAge:   3600, // Token expiration in seconds
 	})
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "Login successful")
-
+	log.Printf("Access token set for user: %s\n", credentials.Email)
 }
