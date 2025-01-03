@@ -1,13 +1,13 @@
 // src/components/ConfirmationPage.js
-import React, { useState } from 'react';
-import { CognitoUser } from 'amazon-cognito-identity-js';
-import UserPool from '../cognitoConfig';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from "react";
+import { CognitoUser } from "amazon-cognito-identity-js";
+import UserPool from "../cognitoConfig";
+import { useNavigate, useLocation } from "react-router-dom";
 
-const ConfirmationPage = () => {
-  const [otp, setOtp] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+const ConfirmationPage: React.FC = () => {
+  const [otp, setOtp] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -15,10 +15,10 @@ const ConfirmationPage = () => {
 
   if (!email) {
     // If email is not provided, redirect to registration
-    navigate('/register');
+    navigate("/register");
   }
 
-  const handleConfirm = (e) => {
+  const handleConfirm = (e: any) => {
     e.preventDefault();
 
     const user = new CognitoUser({
@@ -29,13 +29,13 @@ const ConfirmationPage = () => {
     user.confirmRegistration(otp, true, (err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));
-        setSuccessMessage('');
+        setSuccessMessage("");
         return;
       }
-      setSuccessMessage('Your account has been verified!');
-      setErrorMessage('');
+      setSuccessMessage("Your account has been verified!");
+      setErrorMessage("");
       // Optionally redirect to login or dashboard
-      navigate('/login');
+      navigate("/login");
     });
   };
 
@@ -50,7 +50,7 @@ const ConfirmationPage = () => {
         setErrorMessage(err.message || JSON.stringify(err));
         return;
       }
-      setSuccessMessage('Verification code resent successfully.');
+      setSuccessMessage("Verification code resent successfully.");
     });
   };
 

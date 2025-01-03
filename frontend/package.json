@@ -1,12 +1,16 @@
 {
   "name": "titan-vault-encryption",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "index.tsx",
   "scripts": {
     "start": "webpack serve --mode development --open",
     "build": "webpack --mode production"
   },
   "dependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.10.4",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
     "amazon-cognito-identity-js": "^6.3.12",
     "aws-sdk": "^2.1691.0",
     "latest-version": "^9.0.0",
@@ -28,6 +32,8 @@
     "postcss-loader": "^8.1.1",
     "style-loader": "^4.0.0",
     "tailwindcss": "^3.4.13",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.7.2",
     "webpack": "^5.0.0",
     "webpack-cli": "^4.0.0",
     "webpack-dev-server": "^4.0.0"

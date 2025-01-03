@@ -1,15 +1,15 @@
 // src/components/LoginPage.js
-import React, { useState } from 'react';
-import { CognitoUser, AuthenticationDetails } from 'amazon-cognito-identity-js';
-import UserPool from '../cognitoConfig';
+import React, { useState } from "react";
+import { CognitoUser, AuthenticationDetails } from "amazon-cognito-identity-js";
+import UserPool from "../cognitoConfig";
 
 const LoginPage = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const handleLogin = (e) => {
+  const handleLogin = (e: any) => {
     e.preventDefault();
 
     const user = new CognitoUser({
@@ -25,14 +25,14 @@ const LoginPage = () => {
     user.authenticateUser(authDetails, {
       onSuccess: (result) => {
         const accessToken = result.getAccessToken().getJwtToken();
-        console.log('Login successful! Access Token:', accessToken);
-        setSuccessMessage('Login successful!');
-        setErrorMessage('');
+        console.log("Login successful! Access Token:", accessToken);
+        setSuccessMessage("Login successful!");
+        setErrorMessage("");
         // Redirect to a protected route or dashboard here
       },
       onFailure: (err) => {
         setErrorMessage(err.message || JSON.stringify(err));
-        setSuccessMessage('');
+        setSuccessMessage("");
       },
     });
   };
@@ -51,9 +51,7 @@ const LoginPage = () => {
         <h2 className="text-2xl font-semibold text-gray-700 mb-4">
           Login to your account
         </h2>
-        <p className="text-gray-500 mb-6">
-          Enter your credentials to continue
-        </p>
+        <p className="text-gray-500 mb-6">Enter your credentials to continue</p>
 
         <form onSubmit={handleLogin} className="w-full">
           {/* Email Input */}
@@ -93,7 +91,7 @@ const LoginPage = () => {
 
         {/* Register Link */}
         <p className="text-gray-500 mt-4">
-          Don’t have an account?{' '}
+          Don’t have an account?{" "}
           <a href="/register" className="text-blue-500">
             Register
           </a>

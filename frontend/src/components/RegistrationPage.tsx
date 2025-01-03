@@ -1,36 +1,36 @@
 // src/components/RegistrationPage.js
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom'; // Import useNavigate and Link
-import UserPool from '../cognitoConfig';
-import { CognitoUserAttribute } from 'amazon-cognito-identity-js'; // Import CognitoUserAttribute
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom"; // Import useNavigate and Link
+import UserPool from "../cognitoConfig";
+import { CognitoUserAttribute } from "amazon-cognito-identity-js"; // Import CognitoUserAttribute
 
 const RegistrationPage = () => {
-  const [name, setName] = useState(''); // Optional attribute
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [name, setName] = useState(""); // Optional attribute
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   // Removed successMessage since we'll navigate to the confirmation page
 
   const navigate = useNavigate(); // Initialize useNavigate
 
-  const handleRegister = (e) => {
+  const handleRegister = (e: any) => {
     e.preventDefault();
 
     // Add name as a user attribute if needed
     const attributeList = [];
     const nameAttribute = new CognitoUserAttribute({
-      Name: 'name',
+      Name: "name",
       Value: name,
     });
     attributeList.push(nameAttribute);
 
-    UserPool.signUp(email, password, attributeList, null, (err, result) => {
+    UserPool.signUp(email, password, attributeList, [], (err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));
         return;
       }
       // Navigate to the ConfirmationPage and pass the email
-      navigate('/confirm', { state: { email } });
+      navigate("/confirm", { state: { email } });
     });
   };
 
@@ -85,11 +85,11 @@ const RegistrationPage = () => {
           <div className="flex items-center mb-4">
             <input type="checkbox" id="terms" className="mr-2" required />
             <label htmlFor="terms" className="text-gray-500">
-              I agree to the{' '}
+              I agree to the{" "}
               <a href="#" className="text-blue-500">
                 Terms and Conditions
-              </a>{' '}
-              and the{' '}
+              </a>{" "}
+              and the{" "}
               <a href="#" className="text-blue-500">
                 Privacy Policy
               </a>
@@ -110,7 +110,7 @@ const RegistrationPage = () => {
 
         {/* Login Link */}
         <p className="text-gray-500 mt-4">
-          Already have an account?{' '}
+          Already have an account?{" "}
           <Link to="/login" className="text-blue-500">
             Login
           </Link>

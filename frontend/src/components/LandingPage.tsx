@@ -1,16 +1,16 @@
 // src/components/LandingPage.js
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from "react";
+import { useNavigate } from "react-router-dom";
 
 const LandingPage = () => {
   const navigate = useNavigate();
 
   const handleRegisterClick = () => {
-    navigate('/register');
+    navigate("/register");
   };
 
   const handleLoginClick = () => {
-    navigate('/login');
+    navigate("/login");
   };
 
   return (
