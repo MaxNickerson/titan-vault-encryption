@@ -53,48 +53,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 
-	err := json.NewDecoder(r.Body).Decode(&credentials)
-	if err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-	// fmt.Println(credentials) // passes credentials fine
-	// Load AWS configuration
-	cfg, err := config.LoadDefaultConfig(r.Context())
-	if err != nil {
-		http.Error(w, "Failed to load AWS config", http.StatusInternalServerError)
-		return
-	}
+	
 
-	// Create Cognito client
-	client := cognitoidentityprovider.NewFromConfig(cfg)
-
-	// Authenticate user with Cognito
-	input := &cognitoidentityprovider.InitiateAuthInput{
-		AuthFlow: "USER_PASSWORD_AUTH",
-		ClientId: aws.String(os.Getenv("COGNITO_CLIENT_ID")),
-		AuthParameters: map[string]string{
-			"USERNAME": credentials.Email,
-			"PASSWORD": credentials.Password,
-		},
-	}
-	// fmt.Println(input)
-	result, err := client.InitiateAuth(r.Context(), input)
-	if err != nil {
-		http.Error(w, "Authentication failed", http.StatusUnauthorized)
-		return
-	}
-
-	// Set HTTP-only cookie with the access token
-	http.SetCookie(w, &http.Cookie{
-		Name:     "access_token",
-		Value:    *result.AuthenticationResult.AccessToken,
-		HttpOnly: true,
-		Secure:   false, // Ensure this is true in production (requires HTTPS)
-		Path:     "/",
-		MaxAge:   3600, // Token expiration in seconds
-	})
-
+	
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "Login successful")
 
