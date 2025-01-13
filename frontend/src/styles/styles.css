@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.btn {
+    @apply w-full py-3 px-6 text-white rounded-full text-lg transition;
+}
+
+.btn-primary {
+    @apply bg-gradient-to-r from-blue-400 to-blue-600 hover:bg-blue-700;
+}
+
+.bg-gradient-custom {
+    @apply bg-gradient-to-b from-blue-200 to-gray-300;
+  }
