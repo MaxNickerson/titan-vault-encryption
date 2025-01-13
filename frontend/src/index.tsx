@@ -1,5 +1,5 @@
 // src/index.js
-
+import "./styles/styles.css"; // Import global styles, including Tailwind CSS
 import React from "react";
 import ReactDOM from "react-dom/client";
 import "./styles/index.css"; // Import global styles, including Tailwind CSS
