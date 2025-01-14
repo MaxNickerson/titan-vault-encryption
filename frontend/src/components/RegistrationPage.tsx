@@ -8,14 +8,22 @@ const RegistrationPage = () => {
   const [name, setName] = useState(""); // Optional attribute
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  // Removed successMessage since we'll navigate to the confirmation page
+  const [passwordError, setPasswordError] = useState("");
 
   const navigate = useNavigate(); // Initialize useNavigate
 
-  const handleRegister = (e: any) => {
+  const handleRegister = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-
+  
+    if (password !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    } else {
+      setPasswordError("");
+    }
+  
     // Add name as a user attribute if needed
     const attributeList = [];
     const nameAttribute = new CognitoUserAttribute({
@@ -23,7 +31,7 @@ const RegistrationPage = () => {
       Value: name,
     });
     attributeList.push(nameAttribute);
-
+  
     UserPool.signUp(email, password, attributeList, [], (err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));
@@ -33,6 +41,7 @@ const RegistrationPage = () => {
       navigate("/confirm", { state: { email } });
     });
   };
+  
 
   return (
     <div className="flex h-screen">
@@ -75,11 +84,30 @@ const RegistrationPage = () => {
           <input
             type="password"
             placeholder="Password"
-            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full py-3 px-4 mb-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
+
+          {/* Password Requirements */}
+          <p className="text-sm text-gray-500 mb-4">
+            Password must contain at least one uppercase letter, one lowercase
+            letter, one number, and one special character.
+          </p>
+
+          {/* Confirm Password Input */}
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+
+          {/* Password Mismatch Error */}
+          {passwordError && <p className="text-red-500 mb-4">{passwordError}</p>}
 
           {/* Checkbox for Terms */}
           <div className="flex items-center mb-4">
