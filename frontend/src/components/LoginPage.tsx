@@ -1,16 +1,13 @@
-// src/components/LoginPage.js
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CognitoUser, AuthenticationDetails } from "amazon-cognito-identity-js";
-import UserPool from "../cognitoConfig";
 
-const LoginPage = () => {
+const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const handleLogin = async (e: any) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
@@ -19,15 +16,32 @@ const LoginPage = () => {
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include", // Include cookies in the request
+        credentials: "include", // if you want cookies to be included
         body: JSON.stringify({ email, password }),
       });
 
       if (response.ok) {
-        // Handle successful login
+        // Parse the JSON for tokens
+        const data = await response.json();
+        console.log("Tokens received:", data);
+
+        // data should look like:
+        // {
+        //   "IdToken": "xxx.yyy.zzz",
+        //   "AccessToken": "...",
+        //   "RefreshToken": "...",
+        //   "TokenType": "Bearer"
+        // }
+
+        // Store tokens in localStorage (or cookies, if preferred)
+        localStorage.setItem("idToken", data.IdToken);
+        localStorage.setItem("accessToken", data.AccessToken);
+        localStorage.setItem("refreshToken", data.RefreshToken);
+
+        // Navigate to your protected page
         navigate("/encryption");
-        // Redirect to a protected route or update the UI
       } else {
+        // If not ok, show the error message
         const errorText = await response.text();
         setErrorMessage(errorText);
       }
@@ -57,7 +71,7 @@ const LoginPage = () => {
           <input
             type="email"
             placeholder="Email"
-            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -67,17 +81,14 @@ const LoginPage = () => {
           <input
             type="password"
             placeholder="Password"
-            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
 
           {/* Submit Button */}
-          <button
-            type="submit"
-            className="btn btn-primary"
-          >
+          <button type="submit" className="btn btn-primary">
             Login
           </button>
         </form>
