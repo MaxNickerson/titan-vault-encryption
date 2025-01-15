@@ -5,6 +5,8 @@ import RegistrationPage from "./components/RegistrationPage";
 import LoginPage from "./components/LoginPage";
 import ConfirmationPage from "./components/ConfirmationPage";
 import EncryptionPage from "./components/EncryptionPage";
+import ProtectedRoute from './components/ProtectedRoute';
+
 
 const App = () => {
   return (
@@ -14,7 +16,7 @@ const App = () => {
         <Route path="/register" element={<RegistrationPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/confirm" element={<ConfirmationPage />} />
-        <Route path="/encryption" element={<EncryptionPage />} />
+        <Route path="/encryption" element={<ProtectedRoute><EncryptionPage /></ProtectedRoute>} />
         {/* Add other routes as needed */}
       </Routes>
     </Router>
