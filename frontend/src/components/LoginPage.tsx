@@ -34,7 +34,7 @@ const LoginPage: React.FC = () => {
         const data = await response.json();
         console.log("Tokens received:", data);
 
-        // data should look like:
+        // data looks like:
         // {
         //   "IdToken": "xxx.yyy.zzz",
         //   "AccessToken": "...",
@@ -44,8 +44,9 @@ const LoginPage: React.FC = () => {
 
         // Store tokens in localStorage (or cookies, if preferred)
         localStorage.setItem("idToken", data.IdToken);
-        localStorage.setItem("accessToken", data.AccessToken);
+        localStorage.setItem("accessToken", data.AccessToken); // we pass this to the backend
         localStorage.setItem("refreshToken", data.RefreshToken);
+        // a refresh token is used to get a new access token when the current one expires, not a JWT usually
 
         // Navigate to your protected page
         navigate("/encryption");
