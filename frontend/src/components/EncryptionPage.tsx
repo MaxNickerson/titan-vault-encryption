@@ -1,5 +1,5 @@
-// src/components/EncryptionPage.js
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const EncryptionPage = () => {
   const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
@@ -19,6 +19,16 @@ const EncryptionPage = () => {
   const [decryptedData, setDecryptedData] = useState<ArrayBuffer | null>(null);
   const [decryptedFileUrl, setDecryptedFileUrl] = useState<string | null>(null);
   const subtle = globalThis.crypto.subtle;
+
+  const navigate = useNavigate();
+
+  // Logout function
+  const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("idToken");
+    localStorage.removeItem("refreshToken");
+    navigate("/login");
+  };
 
   // Utility functions for encoding/decoding
   const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
@@ -122,7 +132,6 @@ const EncryptionPage = () => {
     }
   };
 
-  // maybe add protobuf
   const handleEncryptFile = async () => {
     if (fileData) {
       const passwordKey = getPasswordKey("mySecurePassword123"); // Convert password
@@ -176,49 +185,62 @@ const EncryptionPage = () => {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gradient-to-b from-blue-100 to-gray-100 ">
-      <div className="w-1/2 flex flex-col justify-center items-center p-8 bg-white rounded-r-lg">
-        <h1 className="text-3xl font-bold mb-6">Upload & Encrypt File</h1>
-        <input
-          type="file"
-          onChange={handleFileUpload}
-          className="mb-4 border border-gray-300 rounded-lg p-2 w-full"
-        />
-        <div className="flex space-x-4">
-          <button
-            onClick={handleEncryptFile}
-            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-          >
-            Encrypt File
-          </button>
-          <button
-            onClick={handleDecryptFile}
-            className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-          >
-            Decrypt File
-          </button>
-        </div>
+    <div className="flex flex-col h-screen bg-gradient-to-b from-blue-100 to-gray-100">
+      {/* Logout Button */}
+      <div className="flex justify-end p-4">
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+        >
+          Logout
+        </button>
+      </div>
 
-        {decryptedFileUrl && (
-          <div className="mt-6">
-            <h2 className="text-xl font-semibold mb-4">Decrypted File:</h2>
-            {fileType.startsWith("image/") ? (
-              <img
-                src={decryptedFileUrl}
-                alt="Decrypted"
-                className="max-w-full h-auto"
-              />
-            ) : (
-              <a
-                href={decryptedFileUrl}
-                download={fileName}
-                className="text-blue-500 underline"
-              >
-                Download {fileName}
-              </a>
-            )}
+      {/* Main Content */}
+      <div className="flex items-center justify-center flex-grow">
+        <div className="w-1/2 flex flex-col justify-center items-center p-8 bg-white rounded-lg">
+          <h1 className="text-3xl font-bold mb-6">Upload & Encrypt File</h1>
+          <input
+            type="file"
+            onChange={handleFileUpload}
+            className="mb-4 border border-gray-300 rounded-lg p-2 w-full"
+          />
+          <div className="flex space-x-4">
+            <button
+              onClick={handleEncryptFile}
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+            >
+              Encrypt File
+            </button>
+            <button
+              onClick={handleDecryptFile}
+              className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
+            >
+              Decrypt File
+            </button>
           </div>
-        )}
+
+          {decryptedFileUrl && (
+            <div className="mt-6">
+              <h2 className="text-xl font-semibold mb-4">Decrypted File:</h2>
+              {fileType.startsWith("image/") ? (
+                <img
+                  src={decryptedFileUrl}
+                  alt="Decrypted"
+                  className="max-w-full h-auto"
+                />
+              ) : (
+                <a
+                  href={decryptedFileUrl}
+                  download={fileName}
+                  className="text-blue-500 underline"
+                >
+                  Download {fileName}
+                </a>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
