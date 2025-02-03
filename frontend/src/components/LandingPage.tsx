@@ -26,6 +26,7 @@ const LandingPage = () => {
     navigate("/encryption"); // Redirect to the protected page
   };
 
+  
   const handleLogout = () => {
     // Remove tokens from localStorage
     localStorage.removeItem("accessToken");

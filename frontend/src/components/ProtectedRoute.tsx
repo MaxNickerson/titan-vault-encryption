@@ -18,7 +18,7 @@ interface ProtectedRouteProps {
         return;
       }
 
-      // veify token with backend 
+      // veify token with backend, IMPORTANT (Might also need to pass IDToken)
       fetch('http://localhost:8080/verify', {
         method: 'POST',
         headers: {
