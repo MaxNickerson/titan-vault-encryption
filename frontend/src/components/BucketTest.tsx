@@ -43,9 +43,11 @@ const BucketTest = () => {
         <div>
           {errorMessage ? (
             <p>{errorMessage}</p>
-          ) : sub ? (
+          ): 
+          sub ? (
             <p>sub: {sub}</p>
-          ) : (
+          ): 
+          (
             <p>Loading...</p>
           )}
         </div>
