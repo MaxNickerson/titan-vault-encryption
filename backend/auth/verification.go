@@ -9,7 +9,8 @@ import (
 	cognitoJwtVerify "github.com/jhosan7/cognito-jwt-verify"
 )
 
-// eventually have methods like this seperate from main
+// delete this later
+
 func TokenVerify(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	fmt.Print(authHeader)
@@ -47,8 +48,53 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. If we reach here, the token is valid. You can continue handling the request.
-	//    For demonstration, just return a success message:
+	fmt.Print("\n", payload)
+	// okok get subject returns the sub
+	fmt.Print("\n")
+	fmt.Print(payload.GetSubject())
+	fmt.Print("\n")
+
 	fmt.Fprintf(w, "Token is valid! Payload: %#v", payload)
+
+}
+
+// first thsi needs to check tokenID to make sure its legit (i.e. call tokenVerify)
+func ReturnSub(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	fmt.Print(authHeader)
+	if authHeader == "" {
+		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
+		return
+	}
+
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+		http.Error(w, "Invalid Authorization header format", http.StatusUnauthorized)
+		return
+	}
+	tokenString := parts[1]
+
+	cognitoConfig := cognitoJwtVerify.Config{
+		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"), // Must be actual User Pool ID, e.g. "us-east-1_XXXXXXX"
+		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
+		TokenUse:   "id", // or "id" if you’re verifying an ID token
+	}
+
+	verifier, err := cognitoJwtVerify.Create(cognitoConfig)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to create verifier: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// verify token from header
+	payload, err := verifier.Verify(tokenString)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
+		return
+	}
+
+	//    For demonstration, just return a success message:
+	fmt.Println("\n\n", tokenString)
+	fmt.Fprintf(w, "\nToken is valid! Payload: %#v", payload)
 
 }

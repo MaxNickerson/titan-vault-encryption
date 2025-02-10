@@ -1,7 +1,7 @@
 package main
 
 import (
-	"backend/auth"
+	verification "backend/auth"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -25,6 +25,8 @@ func main() {
 	mux.HandleFunc("/login", loginHandler)
 
 	mux.HandleFunc("/verify", verification.TokenVerify)
+
+	mux.HandleFunc("/subextract", verification.ReturnSub)
 
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
