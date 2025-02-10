@@ -1,6 +1,7 @@
 package verification
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,11 +10,9 @@ import (
 	cognitoJwtVerify "github.com/jhosan7/cognito-jwt-verify"
 )
 
-// delete this later
-
 func TokenVerify(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
-	fmt.Print(authHeader)
+	// fmt.Print(authHeader)
 	if authHeader == "" {
 		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
 		return
@@ -48,11 +47,11 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Print("\n", payload)
-	// okok get subject returns the sub
-	fmt.Print("\n")
-	fmt.Print(payload.GetSubject())
-	fmt.Print("\n")
+	// fmt.Print("\n", payload)
+	// // okok get subject returns the sub
+	// fmt.Print("\n")
+	// fmt.Print(payload.GetSubject())
+	// fmt.Print("\n")
 
 	fmt.Fprintf(w, "Token is valid! Payload: %#v", payload)
 
@@ -61,7 +60,7 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 // first thsi needs to check tokenID to make sure its legit (i.e. call tokenVerify)
 func ReturnSub(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
-	fmt.Print(authHeader)
+	// fmt.Print(authHeader)
 	if authHeader == "" {
 		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
 		return
@@ -93,8 +92,14 @@ func ReturnSub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//    For demonstration, just return a success message:
-	fmt.Println("\n\n", tokenString)
-	fmt.Fprintf(w, "\nToken is valid! Payload: %#v", payload)
+	sub, err := payload.GetSubject()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("No sub in token: %v", err), http.StatusUnauthorized)
+		return
+	}
+	fmt.Println("\n" + sub)
+	// fmt.Fprintf(w, sub)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(sub)
 
 }
