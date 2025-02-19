@@ -1,4 +1,4 @@
-package verification
+package auth
 
 import (
 	"encoding/json"

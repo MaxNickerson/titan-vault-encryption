@@ -1,16 +1,18 @@
 package main
 
 import (
-	verification "backend/auth"
+	auth "backend/auth"
+	url "backend/url"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/joho/godotenv"
 )
 
@@ -20,13 +22,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
+	url.ListObjects()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", loginHandler)
-
-	mux.HandleFunc("/verify", verification.TokenVerify)
-
-	mux.HandleFunc("/subextract", verification.ReturnSub)
+	mux.HandleFunc("/verify", auth.TokenVerify)
+	mux.HandleFunc("/subextract", auth.ReturnSub)
 
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
@@ -82,7 +83,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(authResult)
 }
 
-// authenticateUser uses AWS Cognito to authenticate user credentials
+// authenticateUser uses AWS Cognito to authenticate user credentials (using AWS SDK V2)
 func authenticateUser(username, password string) (map[string]string, error) {
 	userPoolID := os.Getenv("COGNITO_USER_POOL_ID")
 	clientID := os.Getenv("COGNITO_APP_CLIENT_ID")
@@ -92,34 +93,32 @@ func authenticateUser(username, password string) (map[string]string, error) {
 		return nil, fmt.Errorf("missing environment variables for Cognito configuration")
 	}
 
-	// Create a new AWS session
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
+	ctx := context.Background()
+
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AWS session: %v", err)
+		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
 
-	// Initialize the CognitoIdentityProvider client
-	cip := cognitoidentityprovider.New(sess)
+	// Initialize the CognitoIdentityProvider client using V2
+	cip := cognitoidentityprovider.NewFromConfig(cfg)
 
 	// Build the input for InitiateAuth
 	input := &cognitoidentityprovider.InitiateAuthInput{
-		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
+		AuthFlow: "USER_PASSWORD_AUTH",
 		ClientId: aws.String(clientID),
-		AuthParameters: map[string]*string{
-			"USERNAME": aws.String(username),
-			"PASSWORD": aws.String(password),
+		AuthParameters: map[string]string{
+			"USERNAME": username,
+			"PASSWORD": password,
 		},
 	}
 
-	// Make the request to Cognito
-	result, err := cip.InitiateAuth(input)
+	// Make the request to Cognito, using the context
+	result, err := cip.InitiateAuth(ctx, input)
 	if err != nil {
 		return nil, fmt.Errorf("cognito InitiateAuth error: %v", err)
 	}
 
-	// If result.AuthenticationResult is nil, it means authentication was not successful
 	if result.AuthenticationResult == nil {
 		return nil, fmt.Errorf("authentication failed: no tokens returned")
 	}
