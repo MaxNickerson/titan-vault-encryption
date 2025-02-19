@@ -1,27 +1,25 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import {EncryptionUtils} from "../encryption/encryptionUtils"
 
 const EncryptionPage = () => {
   const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState("");
   const [fileType, setFileType] = useState("");
-
-  interface EncryptedPackage {
+  const [encryptedPackage, setEncryptedPackage] = useState<{
     iv: string;
     salt: string;
     encryptedData: string;
     fileName: string;
     fileType: string;
-  }
-
-  const [encryptedPackage, setEncryptedPackage] =
-    useState<EncryptedPackage | null>(null);
+  } | null>(null);
   const [decryptedData, setDecryptedData] = useState<ArrayBuffer | null>(null);
   const [decryptedFileUrl, setDecryptedFileUrl] = useState<string | null>(null);
-  const subtle = globalThis.crypto.subtle;
+
+  
 
   const navigate = useNavigate();
-
+  const encryptionUtils = new EncryptionUtils();
   // Logout function
   const handleLogout = () => {
     localStorage.removeItem("accessToken");
@@ -48,85 +46,17 @@ const EncryptionPage = () => {
     return bytes.buffer;
   };
 
-  const getPasswordKey = (password: string) => {
-    const encoder = new TextEncoder();
-    return encoder.encode(password);
-  };
-
-  const generateSalt = () => {
-    const salt = new Uint8Array(16); // 16 bytes = 128 bits of salt
-    globalThis.crypto.getRandomValues(salt);
-    return salt;
-  };
-
-  const deriveKey = async (
-    password: ArrayBuffer,
-    salt: Uint8Array<ArrayBuffer>
-  ) => {
-    // Import the password as key material for PBKDF2
-    const keyMaterial = await subtle.importKey(
-      "raw",
-      password, // ArrayBuffer from getPasswordKey
-      "PBKDF2",
-      false,
-      ["deriveKey"]
-    );
-
-    return subtle.deriveKey(
-      {
-        name: "PBKDF2",
-        salt,
-        iterations: 100000,
-        hash: "SHA-256",
-      },
-      keyMaterial,
-      { name: "AES-GCM", length: 256 },
-      true,
-      ["encrypt", "decrypt"]
-    );
-  };
-
-  const encryptData = async (key: CryptoKey, data: BufferSource) => {
-    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await subtle.encrypt(
-      {
-        name: "AES-GCM",
-        iv,
-      },
-      key,
-      data
-    );
-    return { iv, encrypted: new Uint8Array(encrypted) };
-  };
-
-  const decryptData = async (
-    key: CryptoKey,
-    iv: Uint8Array<ArrayBuffer>,
-    encryptedData: BufferSource
-  ) => {
-    const decrypted = await subtle.decrypt(
-      {
-        name: "AES-GCM",
-        iv: iv, // Use the same IV that was used for encryption
-      },
-      key, // The AES key derived from PBKDF2
-      encryptedData // The encrypted data (ArrayBuffer)
-    );
-
-    return decrypted; // Decrypted data (ArrayBuffer)
-  };
-
+  // Handle file upload
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
       const file = files[0];
-      setFileName(file.name); // Store file name
-      setFileType(file.type); // Store MIME type
+      setFileName(file.name);
+      setFileType(file.type);
       const reader = new FileReader();
-      reader.onload = async (e) => {
-        if (e.target) {
-          const arrayBuffer = e.target.result as ArrayBuffer;
-          setFileData(arrayBuffer);
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setFileData(e.target.result as ArrayBuffer);
         }
       };
       reader.readAsArrayBuffer(file);
@@ -134,56 +64,60 @@ const EncryptionPage = () => {
   };
 
   const handleEncryptFile = async () => {
-    if (fileData) {
-      const passwordKey = getPasswordKey("mySecurePassword123"); // Convert password
-      const salt = generateSalt(); // Generate salt
-      const aesKey = await deriveKey(passwordKey, salt); // Derive AES key
+    if(fileData) {
+      try {
+        const password = "myTestPassword123"
+        // call the utility class
+        const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
+          fileData,
+          password
+        );
 
-      // Encrypt the file data
-      const { iv, encrypted } = await encryptData(aesKey, fileData);
-
-      // Package encrypted data and metadata
-      const encryptedPackage = {
-        iv: arrayBufferToBase64(iv), // Encode iv to Base64
-        salt: arrayBufferToBase64(salt), // Encode salt to Base64
-        encryptedData: arrayBufferToBase64(encrypted.buffer), // Encode encrypted data to Base64
-        fileName: fileName, // Include file name
-        fileType: fileType, // Include MIME type
-      };
-
-      setEncryptedPackage(encryptedPackage);
-
-      console.log("Encrypted package:", encryptedPackage);
-      // You can now handle the encryptedPackage (e.g., save it, send it to a server, etc.)
+        const packageData = {
+          iv: arrayBufferToBase64(iv),
+          salt: arrayBufferToBase64(salt),
+          encryptedData: arrayBufferToBase64(encryptedData),
+          fileName,
+          fileType,
+        };
+        setEncryptedPackage(packageData);
+        console.log("Encrypted package:", packageData);
+      } catch (error) {
+        console.error("Encryption error:", error);
+      }
     }
   };
 
+  // Decrypt the file using the EncryptionUtils class
   const handleDecryptFile = async () => {
     if (encryptedPackage) {
-      const passwordKey = getPasswordKey("mySecurePassword123"); // Convert password
+      try {
+        const password = "myTestPassword123";
+        // Convert the stored Base64 values back to ArrayBuffers/Uint8Arrays
+        const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
+        const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
+        const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
 
-      // Decode Base64 strings back to ArrayBuffers
-      const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
-      const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
-      const encryptedData = new Uint8Array(
-        base64ToArrayBuffer(encryptedPackage.encryptedData)
-      );
+        // Decrypt using the encryption utility
+        const decryptedBuffer = await encryptionUtils.decryptData(
+          encryptedData,
+          password,
+          salt,
+          iv
+        );
+        setDecryptedData(decryptedBuffer);
+        console.log("Decrypted file data:", new Uint8Array(decryptedBuffer));
 
-      const aesKey = await deriveKey(passwordKey, salt); // Derive AES key
-
-      // Decrypt the file data
-      const decrypted = await decryptData(aesKey, iv, encryptedData);
-
-      setDecryptedData(decrypted);
-
-      console.log("Decrypted file data:", new Uint8Array(decrypted));
-
-      // Create a Blob from the decrypted data using the original MIME type
-      const blob = new Blob([decrypted], { type: encryptedPackage.fileType });
-      const url = URL.createObjectURL(blob);
-      setDecryptedFileUrl(url);
+        // Create a Blob from the decrypted data and generate a URL for display/download
+        const blob = new Blob([decryptedBuffer], { type: encryptedPackage.fileType });
+        const url = URL.createObjectURL(blob);
+        setDecryptedFileUrl(url);
+      } catch (error) {
+        console.error("Decryption error:", error);
+      }
     }
   };
+
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-blue-100 to-gray-100">

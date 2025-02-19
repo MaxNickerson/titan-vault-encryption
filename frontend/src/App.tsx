@@ -17,16 +17,17 @@ const App: React.FC = () => {
         <Route path="/register" element={<RegistrationPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/confirm" element={<ConfirmationPage />} />
-        
-        {/* Protected Routes */}
-        <Route
-          path="/encryption"
-          element={
-            <ProtectedRoute>
-              <EncryptionPage />
-            </ProtectedRoute>
-          }
-        />
+
+        {/*
+          HEAD version used <ProtectedRoute> for /encryption. 
+          max’s version had it unprotected. 
+          We'll keep max’s approach of no ProtectedRoute for encryption:
+        */}
+        <Route path="/encryption" element={<EncryptionPage />} />
+
+        {/*
+          HEAD used <ProtectedRoute> for /bucket, so let's keep that for now:
+        */}
         <Route
           path="/bucket"
           element={

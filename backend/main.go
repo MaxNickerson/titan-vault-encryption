@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
-	"github.com/joho/godotenv"
+	// "github.com/joho/godotenv" // Uncomment if using .env
+	// "os"
 )
 
 func main() {
-	// Load environment variables from .env (COGNITO_USER_POOL_ID, COGNITO_APP_CLIENT_ID, AWS_REGION, etc.)
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
-	}
+	// If using .env, uncomment:
+	// err := godotenv.Load()
+	// if err != nil {
+	// 	log.Fatalf("Error loading .env file: %v", err)
+	// }
 
 	mux := http.NewServeMux()
 
@@ -27,10 +27,8 @@ func main() {
 	mux.HandleFunc("/login", loginHandler)
 	mux.HandleFunc("/resendVerification", resendVerificationHandler)
 
-	// --------------------------------------------
-	// NEW ROUTE for responding to MFA challenges:
+	// New route for responding to MFA challenges
 	mux.HandleFunc("/respondMFA", respondMFAHandler)
-	// --------------------------------------------
 
 	// Protected routes
 	mux.HandleFunc("/verify", verification.TokenVerify)
@@ -88,13 +86,10 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 
 // authenticateUser uses AWS Cognito to authenticate user credentials.
 func authenticateUser(username, password string) (map[string]string, error) {
-	userPoolID := os.Getenv("COGNITO_USER_POOL_ID")
-	clientID := os.Getenv("COGNITO_APP_CLIENT_ID")
-	region := os.Getenv("AWS_REGION")
-
-	if userPoolID == "" || clientID == "" || region == "" {
-		return nil, fmt.Errorf("missing environment variables for Cognito configuration")
-	}
+	// Hardcode or read from environment. Using new IDs directly:
+	// userPoolID := "us-east-1_ZSdwAA8FJ" // not currently used
+	clientID := "28bk3ok0246oodeorj8l5ikk6c"
+	region := "us-east-1"
 
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(region),
@@ -118,9 +113,7 @@ func authenticateUser(username, password string) (map[string]string, error) {
 		return nil, fmt.Errorf("cognito InitiateAuth error: %v", err)
 	}
 
-	// --------------------------------------------------------
-	// If Cognito returns a challenge (e.g. SMS_MFA), we won't have tokens yet
-	// --------------------------------------------------------
+	// If Cognito returns a challenge (e.g. SMS_MFA), we won't have tokens yet.
 	if result.ChallengeName != nil {
 		return map[string]string{
 			"ChallengeName": *result.ChallengeName,
@@ -129,7 +122,6 @@ func authenticateUser(username, password string) (map[string]string, error) {
 		}, nil
 	}
 
-	// If no challenge but no tokens => error
 	if result.AuthenticationResult == nil {
 		return nil, fmt.Errorf("authentication failed: no tokens returned")
 	}
@@ -159,8 +151,8 @@ func resendVerificationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := os.Getenv("COGNITO_APP_CLIENT_ID")
-	region := os.Getenv("AWS_REGION")
+	clientID := "28bk3ok0246oodeorj8l5ikk6c"
+	region := "us-east-1"
 
 	sess, err := session.NewSession(&aws.Config{Region: aws.String(region)})
 	if err != nil {
@@ -186,10 +178,8 @@ func resendVerificationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --------------------------------------------------------
 // respondMFAHandler responds to SMS_MFA or SOFTWARE_TOKEN_MFA challenge
 // after the user enters their MFA code. On success, returns the tokens.
-// --------------------------------------------------------
 func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -199,16 +189,16 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Session string `json:"session"`
 		MfaCode string `json:"mfaCode"`
-		Email   string `json:"email"` // Typically the USERNAME for ChallengeResponses
+		Email   string `json:"email"`
 	}
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
 		return
 	}
 
-	//userPoolID := os.Getenv("COGNITO_USER_POOL_ID")
-	clientID := os.Getenv("COGNITO_APP_CLIENT_ID")
-	region := os.Getenv("AWS_REGION")
+	clientID := "28bk3ok0246oodeorj8l5ikk6c"
+	region := "us-east-1"
 
 	sess, err := session.NewSession(&aws.Config{
 		Region: aws.String(region),
@@ -242,7 +232,6 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Now we have valid tokens
 	tokens := map[string]string{
 		"IdToken":      *resp.AuthenticationResult.IdToken,
 		"AccessToken":  *resp.AuthenticationResult.AccessToken,
