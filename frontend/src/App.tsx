@@ -17,7 +17,8 @@ const App = () => {
         <Route path="/register" element={<RegistrationPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/confirm" element={<ConfirmationPage />} />
-        <Route path="/encryption" element={<ProtectedRoute><EncryptionPage /></ProtectedRoute>} />
+        {/* <Route path="/encryption" element={<ProtectedRoute><EncryptionPage /></ProtectedRoute>} /> add this back when not testing */}
+        <Route path="/encryption" element={<EncryptionPage />} />
         <Route path="/bucket" element={<ProtectedRoute><BucketTest /></ProtectedRoute>} />
         {/* Add other routes as needed */}
       </Routes>
