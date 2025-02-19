@@ -27,6 +27,7 @@ const EncryptionPage = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("idToken");
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("email");
     navigate("/login");
   };
 

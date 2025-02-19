@@ -1,5 +1,5 @@
-// src/components/ConfirmationPage.js
-import React, { useState } from "react";
+// src/components/ConfirmationPage.tsx
+import React, { useState, useEffect } from "react";
 import { CognitoUser } from "amazon-cognito-identity-js";
 import UserPool from "../cognitoConfig";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -8,18 +8,25 @@ const ConfirmationPage: React.FC = () => {
   const [otp, setOtp] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-
+  
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email;
+  // Try to get the email from location state; if not present, fallback to localStorage.
+  const email = location.state?.email || localStorage.getItem("email");
 
-  if (!email) {
-    // If email is not provided, redirect to registration
-    navigate("/register");
-  }
+  useEffect(() => {
+    if (!email) {
+      // If email is not provided, redirect to registration.
+      navigate("/register");
+    }
+  }, [email, navigate]);
 
-  const handleConfirm = (e: any) => {
+  const handleConfirm = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email) {
+      setErrorMessage("Email not found.");
+      return;
+    }
 
     const user = new CognitoUser({
       Username: email,
@@ -34,12 +41,16 @@ const ConfirmationPage: React.FC = () => {
       }
       setSuccessMessage("Your account has been verified!");
       setErrorMessage("");
-      // Optionally redirect to login or dashboard
+      // Optionally, clear stored unverified email or any flags, and redirect to login.
       navigate("/login");
     });
   };
 
   const handleResendCode = () => {
+    if (!email) {
+      setErrorMessage("Email not found.");
+      return;
+    }
     const user = new CognitoUser({
       Username: email,
       Pool: UserPool,
@@ -69,6 +80,7 @@ const ConfirmationPage: React.FC = () => {
           Verify Your Account
         </h2>
         <p className="text-gray-500 mb-6">
+          Your email address ({email}) must be verified before you can log in.
           Please enter the verification code sent to your email.
         </p>
 
@@ -92,12 +104,12 @@ const ConfirmationPage: React.FC = () => {
           </button>
         </form>
 
-        {/* Resend Code */}
+        {/* Resend Code Button */}
         <button
           onClick={handleResendCode}
           className="mt-4 text-blue-500 hover:underline"
         >
-          Resend Verification Code
+          Send verification code now?
         </button>
 
         {/* Error and Success Messages */}

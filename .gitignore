@@ -3,3 +3,4 @@ dist/
 # In root .gitignore
 backend/.env
 frontend/.env
+node_modules

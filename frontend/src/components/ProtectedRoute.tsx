@@ -1,63 +1,64 @@
-import React, { JSX, useEffect, useState } from 'react';
-import {Navigate} from 'react-router-dom';
+import React, { useEffect, useState, ReactNode } from "react";
+import { Navigate } from "react-router-dom";
 
 interface ProtectedRouteProps {
-    children: JSX.Element;
-  }
-  
-  const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-    const [isValid, setIsValid] = useState<boolean | null>(null);
-    const accessToken = localStorage.getItem('accessToken');
-    const idToken = localStorage.getItem('idToken');
-    const refreshToken = localStorage.getItem('refreshToken');
-    
-    useEffect(() => {
-      // if no token found, redirect to login page
-      if (!accessToken) {
-        setIsValid(false);
-        return;
-      }
+  children: ReactNode;
+}
 
-      // veify token with backend, IMPORTANT (Might also need to pass IDToken)
-      fetch('http://localhost:8080/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-        .then((response) => {
-          if (response.ok) {
-            // if server returns 200/OK consider it valid
-            setIsValid(true);
-          } else {
-            setIsValid(false);
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+  const [isValid, setIsValid] = useState<boolean | null>(null);
+  // Use the ID token for email verification.
+  const idToken = localStorage.getItem("idToken");
+
+  useEffect(() => {
+    if (!idToken) {
+      setIsValid(false);
+      return;
+    }
+
+    fetch("http://localhost:8080/verify", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          setIsValid(true);
+        } else if (res.status === 403) {
+          // Parse the JSON response to check if it's due to unverified email.
+          const data = await res.json().catch(() => ({}));
+          if (data.error === "email_not_verified") {
+            // Set a flag so we can redirect to the confirmation page.
+            localStorage.setItem("emailNotVerified", "true");
           }
-        })
-        .catch(() => {
-          // if there is any error
           setIsValid(false);
-        });
-      }, [accessToken]);
+        } else {
+          setIsValid(false);
+        }
+      })
+      .catch(() => setIsValid(false));
+  }, [idToken]);
 
-    // 3. Based on isValid, show some loading state, or redirect, or render children
-    if (isValid === null) {
-      // Still verifying token...
-      return <div>Loading...</div>;
+  if (isValid === null) {
+    return <div>Loading...</div>;
+  }
+
+  if (isValid === false) {
+    // If the error is due to unverified email, redirect to ConfirmationPage.
+    if (localStorage.getItem("emailNotVerified") === "true") {
+      localStorage.removeItem("emailNotVerified");
+      return <Navigate to="/confirm" replace />;
     }
+    // Otherwise, clear tokens and redirect to /login.
+    localStorage.removeItem("idToken");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    return <Navigate to="/login" replace />;
+  }
 
-    // 4. If invalid, redirect to login
-    if (isValid === false) {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("idToken");
-      localStorage.removeItem("refreshToken");
-      return <Navigate to="/login" replace />;
-    }
+  return <>{children}</>;
+};
 
-
-  
-    // If token is present, render the protected component
-    return children;
-  };
-  
-  export default ProtectedRoute;
+export default ProtectedRoute;

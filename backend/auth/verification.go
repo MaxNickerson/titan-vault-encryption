@@ -1,6 +1,7 @@
 package verification
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,11 +10,12 @@ import (
 	cognitoJwtVerify "github.com/jhosan7/cognito-jwt-verify"
 )
 
-// delete this later
-
+// TokenVerify checks if the ID token is valid AND if the user's email is verified.
+// The frontend must send the **ID Token** in the Authorization header.
 func TokenVerify(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
-	fmt.Print(authHeader)
+	fmt.Println("Authorization header:", authHeader)
+
 	if authHeader == "" {
 		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
 		return
@@ -26,13 +28,10 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenString := parts[1]
 
-	// 3. Set up the Cognito config
-	//    Typically, "access" is used if you want to validate the Access token.
-	//    If you want to validate the ID token, set TokenUse to "id".
 	cognitoConfig := cognitoJwtVerify.Config{
-		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"), // Must be actual User Pool ID, e.g. "us-east-1_XXXXXXX"
+		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"),
 		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
-		TokenUse:   "access", // or "id" if you’re verifying an ID token
+		TokenUse:   "id", // Using ID token to check email_verified.
 	}
 
 	verifier, err := cognitoJwtVerify.Create(cognitoConfig)
@@ -41,27 +40,44 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// verify token from header
-	payload, err := verifier.Verify(tokenString)
+	claimsInterface, err := verifier.Verify(tokenString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
 		return
 	}
 
-	fmt.Print("\n", payload)
-	// okok get subject returns the sub
-	fmt.Print("\n")
-	fmt.Print(payload.GetSubject())
-	fmt.Print("\n")
+	// Use a JSON round-trip to convert the claims to a plain map[string]interface{}
+	raw, err := json.Marshal(claimsInterface)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to marshal claims: %v", err), http.StatusInternalServerError)
+		return
+	}
 
-	fmt.Fprintf(w, "Token is valid! Payload: %#v", payload)
+	var claims map[string]interface{}
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to unmarshal claims: %v", err), http.StatusInternalServerError)
+		return
+	}
 
+	// Check the email_verified claim.
+	emailVerified, _ := claims["email_verified"].(bool)
+	if !emailVerified {
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":   "email_not_verified",
+			"message": "Your email must be verified. Please confirm your email address.",
+		})
+		return
+	}
+
+	// If email is verified, return success.
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Token is valid"})
 }
 
-// first thsi needs to check tokenID to make sure its legit (i.e. call tokenVerify)
+// ReturnSub verifies the ID token and extracts the "sub" claim (unique user ID).
 func ReturnSub(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
-	fmt.Print(authHeader)
 	if authHeader == "" {
 		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
 		return
@@ -75,9 +91,9 @@ func ReturnSub(w http.ResponseWriter, r *http.Request) {
 	tokenString := parts[1]
 
 	cognitoConfig := cognitoJwtVerify.Config{
-		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"), // Must be actual User Pool ID, e.g. "us-east-1_XXXXXXX"
+		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"),
 		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
-		TokenUse:   "id", // or "id" if you’re verifying an ID token
+		TokenUse:   "id",
 	}
 
 	verifier, err := cognitoJwtVerify.Create(cognitoConfig)
@@ -86,15 +102,30 @@ func ReturnSub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// verify token from header
-	payload, err := verifier.Verify(tokenString)
+	claimsInterface, err := verifier.Verify(tokenString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
 		return
 	}
 
-	//    For demonstration, just return a success message:
-	fmt.Println("\n\n", tokenString)
-	fmt.Fprintf(w, "\nToken is valid! Payload: %#v", payload)
+	raw, err := json.Marshal(claimsInterface)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to marshal claims: %v", err), http.StatusInternalServerError)
+		return
+	}
 
+	var claims map[string]interface{}
+	if err := json.Unmarshal(raw, &claims); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to unmarshal claims: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	userSub, _ := claims["sub"].(string)
+	if userSub == "" {
+		http.Error(w, "Unable to extract user sub", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"sub": userSub})
 }
