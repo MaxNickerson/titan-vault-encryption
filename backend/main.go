@@ -1,25 +1,25 @@
 package main
 
 import (
-	verification "backend/auth"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cognitoidentityprovider"
-	// "github.com/joho/godotenv" // Uncomment if using .env
-	// "os"
+	verification "backend/auth"
+
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// If using .env, uncomment:
-	// err := godotenv.Load()
-	// if err != nil {
-	// 	log.Fatalf("Error loading .env file: %v", err)
-	// }
+	// Load environment variables
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("Error loading .env file: %v", err)
+	}
 
 	mux := http.NewServeMux()
 
@@ -85,39 +85,46 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // authenticateUser uses AWS Cognito to authenticate user credentials.
+// authenticateUser uses AWS Cognito to authenticate user credentials.
 func authenticateUser(username, password string) (map[string]string, error) {
-	// Hardcode or read from environment. Using new IDs directly:
-	// userPoolID := "us-east-1_ZSdwAA8FJ" // not currently used
 	clientID := "28bk3ok0246oodeorj8l5ikk6c"
 	region := "us-east-1"
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
+	// Load AWS configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create AWS session: %v", err)
+		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
 
-	cip := cognitoidentityprovider.New(sess)
+	// Create Cognito client
+	cip := cognitoidentityprovider.NewFromConfig(cfg)
+
+	// Prepare authentication input
 	input := &cognitoidentityprovider.InitiateAuthInput{
-		AuthFlow: aws.String("USER_PASSWORD_AUTH"),
-		ClientId: aws.String(clientID),
-		AuthParameters: map[string]*string{
-			"USERNAME": aws.String(username),
-			"PASSWORD": aws.String(password),
+		AuthFlow: "USER_PASSWORD_AUTH",
+		ClientId: &clientID,
+		AuthParameters: map[string]string{
+			"USERNAME": username,
+			"PASSWORD": password,
 		},
 	}
 
-	result, err := cip.InitiateAuth(input)
+	// Authenticate user
+	result, err := cip.InitiateAuth(context.TODO(), input)
 	if err != nil {
-		return nil, fmt.Errorf("cognito InitiateAuth error: %v", err)
+		return nil, fmt.Errorf("Cognito InitiateAuth error: %v", err)
 	}
 
-	// If Cognito returns a challenge (e.g. SMS_MFA), we won't have tokens yet.
-	if result.ChallengeName != nil {
+	// Handle MFA challenge if needed
+	if result.ChallengeName != "" {
+		sessionValue := ""
+		if result.Session != nil {
+			sessionValue = *result.Session
+		}
+
 		return map[string]string{
-			"ChallengeName": *result.ChallengeName,
-			"Session":       *result.Session,
+			"ChallengeName": string(result.ChallengeName),
+			"Session":       sessionValue,
 			"Message":       "MFA required. Please submit your 2FA code via /respondMFA.",
 		}, nil
 	}
@@ -154,19 +161,19 @@ func resendVerificationHandler(w http.ResponseWriter, r *http.Request) {
 	clientID := "28bk3ok0246oodeorj8l5ikk6c"
 	region := "us-east-1"
 
-	sess, err := session.NewSession(&aws.Config{Region: aws.String(region)})
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create session: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to load AWS config: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	cip := cognitoidentityprovider.New(sess)
+	cip := cognitoidentityprovider.NewFromConfig(cfg)
 	input := &cognitoidentityprovider.ResendConfirmationCodeInput{
-		ClientId: aws.String(clientID),
-		Username: aws.String(req.Email),
+		ClientId: &clientID,
+		Username: &req.Email,
 	}
 
-	_, err = cip.ResendConfirmationCode(input)
+	_, err = cip.ResendConfirmationCode(context.TODO(), input)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to resend confirmation code: %v", err), http.StatusInternalServerError)
 		return
@@ -178,8 +185,7 @@ func resendVerificationHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// respondMFAHandler responds to SMS_MFA or SOFTWARE_TOKEN_MFA challenge
-// after the user enters their MFA code. On success, returns the tokens.
+// respondMFAHandler handles MFA challenges
 func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
@@ -200,28 +206,25 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 	clientID := "28bk3ok0246oodeorj8l5ikk6c"
 	region := "us-east-1"
 
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create AWS session: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("Failed to load AWS config: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	cip := cognitoidentityprovider.New(sess)
+	cip := cognitoidentityprovider.NewFromConfig(cfg)
 
-	// We assume SMS_MFA here, but if you're using TOTP, use SOFTWARE_TOKEN_MFA
 	respondInput := &cognitoidentityprovider.RespondToAuthChallengeInput{
-		ClientId:      aws.String(clientID),
-		ChallengeName: aws.String("SMS_MFA"),
-		Session:       aws.String(req.Session),
-		ChallengeResponses: map[string]*string{
-			"USERNAME":     aws.String(req.Email),
-			"SMS_MFA_CODE": aws.String(req.MfaCode),
+		ClientId:      &clientID,
+		ChallengeName: "SMS_MFA",
+		Session:       &req.Session,
+		ChallengeResponses: map[string]string{
+			"USERNAME":     req.Email,
+			"SMS_MFA_CODE": req.MfaCode,
 		},
 	}
 
-	resp, err := cip.RespondToAuthChallenge(respondInput)
+	resp, err := cip.RespondToAuthChallenge(context.TODO(), respondInput)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to respond to MFA challenge: %v", err), http.StatusUnauthorized)
 		return
