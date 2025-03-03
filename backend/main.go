@@ -2,7 +2,6 @@ package main
 
 import (
 	auth "backend/auth"
-	url "backend/url"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -22,7 +21,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-	url.ListObjects()
+	// url.ListObjects()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/login", loginHandler)
