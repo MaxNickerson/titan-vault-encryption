@@ -7,8 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-
-	verification "backend/auth"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -34,8 +33,8 @@ func main() {
 	mux.HandleFunc("/respondMFA", respondMFAHandler)
 
 	// Protected routes
-	mux.HandleFunc("/verify", verification.TokenVerify)
-	mux.HandleFunc("/subextract", verification.ReturnSub)
+	mux.HandleFunc("/verify", auth.TokenVerify)
+	mux.HandleFunc("/subextract", auth.ReturnSub)
 
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
@@ -98,10 +97,8 @@ func authenticateUser(username, password string) (map[string]string, error) {
 		return nil, fmt.Errorf("missing environment variables for Cognito configuration")
 	}
 
-	// Create a new AWS session
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
+	// Load AWS configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %v", err)
 	}
@@ -120,7 +117,7 @@ func authenticateUser(username, password string) (map[string]string, error) {
 	}
 
 	// Make the request to Cognito
-	result, err := cip.InitiateAuth(input)
+	result, err := cip.InitiateAuth(context.TODO(), input)
 	if err != nil {
 		return nil, fmt.Errorf("Cognito InitiateAuth error: %v", err)
 	}
