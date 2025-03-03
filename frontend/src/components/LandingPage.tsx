@@ -32,6 +32,7 @@ const LandingPage = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("idToken");
     localStorage.removeItem("refreshToken");
+    localStorage.removeItem("email");
   
     // Optional: Clear other sensitive user-related data
     localStorage.removeItem("userInfo");

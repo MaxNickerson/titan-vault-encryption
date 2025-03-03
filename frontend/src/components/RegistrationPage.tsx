@@ -7,6 +7,7 @@ import { CognitoUserAttribute } from "amazon-cognito-identity-js"; // Import Cog
 const RegistrationPage = () => {
   const [name, setName] = useState(""); // Optional attribute
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState(""); // New phone number state
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -23,15 +24,23 @@ const RegistrationPage = () => {
     } else {
       setPasswordError("");
     }
-  
-    // Add name as a user attribute if needed
+
+    // Ensure the phone number is in E.164 format
+    const formattedPhoneNumber = phoneNumber.startsWith("+")
+      ? phoneNumber
+      : `+${phoneNumber}`;
+
+    // Add user attributes
     const attributeList = [];
-    const nameAttribute = new CognitoUserAttribute({
-      Name: "name",
-      Value: name,
-    });
-    attributeList.push(nameAttribute);
-  
+
+    if (name) {
+      attributeList.push(new CognitoUserAttribute({ Name: "name", Value: name }));
+    }
+
+    if (phoneNumber) {
+      attributeList.push(new CognitoUserAttribute({ Name: "phone_number", Value: formattedPhoneNumber }));
+    }
+
     UserPool.signUp(email, password, attributeList, [], (err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));
@@ -41,7 +50,6 @@ const RegistrationPage = () => {
       navigate("/confirm", { state: { email } });
     });
   };
-  
 
   return (
     <div className="flex h-screen">
@@ -77,6 +85,16 @@ const RegistrationPage = () => {
             className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+
+          {/* Phone Number Input */}
+          <input
+            type="tel"
+            placeholder="Phone Number (e.g., +15555550100)"
+            className="w-full py-3 px-4 mb-4 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={phoneNumber}
+            onChange={(e) => setPhoneNumber(e.target.value)}
             required
           />
 

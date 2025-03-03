@@ -5,22 +5,40 @@ import RegistrationPage from "./components/RegistrationPage";
 import LoginPage from "./components/LoginPage";
 import ConfirmationPage from "./components/ConfirmationPage";
 import EncryptionPage from "./components/EncryptionPage";
-import ProtectedRoute from './components/ProtectedRoute';
-import BucketTest from './components/BucketTest';
+import BucketTest from "./components/BucketTest";
+import ProtectedRoute from "./components/ProtectedRoute";
 
-
-const App = () => {
+const App: React.FC = () => {
   return (
     <Router>
       <Routes>
+        {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/register" element={<RegistrationPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/confirm" element={<ConfirmationPage />} />
-        {/* <Route path="/encryption" element={<ProtectedRoute><EncryptionPage /></ProtectedRoute>} /> add this back when not testing */}
+
+        {/*
+          HEAD version used <ProtectedRoute> for /encryption. 
+          max’s version had it unprotected. 
+          We'll keep max’s approach of no ProtectedRoute for encryption:
+        */}
         <Route path="/encryption" element={<EncryptionPage />} />
-        <Route path="/bucket" element={<ProtectedRoute><BucketTest /></ProtectedRoute>} />
-        {/* Add other routes as needed */}
+
+        {/*
+          HEAD used <ProtectedRoute> for /bucket, so let's keep that for now:
+        */}
+        <Route
+          path="/bucket"
+          element={
+            <ProtectedRoute>
+              <BucketTest />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<LandingPage />} />
       </Routes>
     </Router>
   );
