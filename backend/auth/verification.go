@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	cognitoJwtVerify "github.com/jhosan7/cognito-jwt-verify"
@@ -25,8 +26,8 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 	tokenString := parts[1]
 
 	cognitoConfig := cognitoJwtVerify.Config{
-		UserPoolId: "us-east-1_ZSdwAA8FJ",
-		ClientId:   "28bk3ok0246oodeorj8l5ikk6c",
+		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"),
+		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
 		TokenUse:   "id",
 	}
 
@@ -85,8 +86,8 @@ func ReturnSub(w http.ResponseWriter, r *http.Request) {
 	tokenString := parts[1]
 
 	cognitoConfig := cognitoJwtVerify.Config{
-		UserPoolId: "us-east-1_ZSdwAA8FJ",
-		ClientId:   "28bk3ok0246oodeorj8l5ikk6c",
+		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"),
+		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
 		TokenUse:   "id",
 	}
 
@@ -96,32 +97,19 @@ func ReturnSub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claimsInterface, err := verifier.Verify(tokenString)
+	payload, err := verifier.Verify(tokenString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
 		return
 	}
 
-	// Same JSON approach:
-	raw, err := json.Marshal(claimsInterface)
+	sub, err := payload.GetSubject()
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to marshal claims: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("No sub in token: %v", err), http.StatusUnauthorized)
 		return
 	}
-
-	var claims map[string]interface{}
-	if err := json.Unmarshal(raw, &claims); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to unmarshal claims: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	sub, _ := claims["sub"].(string)
-	if sub == "" {
-		http.Error(w, "No sub in token claims", http.StatusUnauthorized)
-		return
-	}
-
-	fmt.Println("User sub:", sub)
+	fmt.Println("\n" + sub)
+	// fmt.Fprintf(w, sub)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(sub)
 }
