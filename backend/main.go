@@ -1,7 +1,8 @@
 package main
 
 import (
-	auth "backend/auth"
+	// auth "backend/auth"
+	url "backend/url"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,21 +24,32 @@ func main() {
 	}
 	// url.ListObjects()
 
-	mux := http.NewServeMux()
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// Public routes
-	mux.HandleFunc("/login", loginHandler)
-	mux.HandleFunc("/resendVerification", resendVerificationHandler)
+	// Upload a sample file
+	err = s3Service.UploadFileToR2(context.TODO(), "image.jpg", []byte("test"))
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// New route for responding to MFA challenges
-	mux.HandleFunc("/respondMFA", respondMFAHandler)
+	// mux := http.NewServeMux()
 
-	// Protected routes
-	mux.HandleFunc("/verify", auth.TokenVerify)
-	mux.HandleFunc("/subextract", auth.ReturnSub)
+	// // Public routes
+	// mux.HandleFunc("/login", loginHandler)
+	// mux.HandleFunc("/resendVerification", resendVerificationHandler)
 
-	fmt.Println("Server is running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
+	// // New route for responding to MFA challenges
+	// mux.HandleFunc("/respondMFA", respondMFAHandler)
+
+	// // Protected routes
+	// mux.HandleFunc("/verify", auth.TokenVerify)
+	// mux.HandleFunc("/subextract", auth.ReturnSub)
+
+	// fmt.Println("Server is running on port 8080")
+	// log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
 }
 
 // enableCors sets the CORS headers for your React app at http://localhost:3000.
