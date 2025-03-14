@@ -94,7 +94,7 @@ const EncryptionPage = () => {
       console.error("No file data to encrypt.");
       return;
     }
-  
+    
     try {
       // 1) Encrypt
       const password = "myTestPassword123";
@@ -107,7 +107,7 @@ const EncryptionPage = () => {
       const packageData = {
         iv: arrayBufferToBase64(iv),
         salt: arrayBufferToBase64(salt),
-        encryptedData: arrayBufferToBase64(encryptedData),
+        encryptedData: arrayBufferToBase64(encryptedData),  
         fileName,
         fileType,
       };
@@ -121,7 +121,7 @@ const EncryptionPage = () => {
         console.error("No ID token found in localStorage.");
         return;
       }
-  
+      
       // 4) Send encrypted data + ID token to your backend
       const response = await fetch("http://localhost:8080/upload", {
         method: "POST",
@@ -132,13 +132,14 @@ const EncryptionPage = () => {
         },
         body: JSON.stringify(packageData),
       });
-  
+      
       if (!response.ok) {
+        
         const errorText = await response.text();
         console.error("Upload failed:", errorText);
         return;
       }
-  
+      
       const data = await response.json();
       console.log("Upload successful:", data);
       // data might contain your "sub" or any server response

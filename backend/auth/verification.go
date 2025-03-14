@@ -31,9 +31,10 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 	cognitoConfig := cognitoJwtVerify.Config{
 		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"),
 		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
-		TokenUse:   "access",
+		TokenUse:   "id",
 	}
 
+	// fmt.Println(cognitoConfig)
 	// creates a verifier with the config we created
 	verifier, err := cognitoJwtVerify.Create(cognitoConfig)
 	if err != nil {
@@ -48,7 +49,6 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
 		return
 	}
-
 	// convert the claims interface to JSON so we can access individual fields
 	// first marshal the interface to a JSON byte array
 	raw, err := json.Marshal(claimsInterface)
@@ -134,30 +134,30 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 	// w.Header().Set("Content-Type", "application/json")
 	// json.NewEncoder(w).Encode(sub)
 
-	// If the Content-Type header is present, check that it has the value
-	// application/json. Note that we parse and normalize the header to remove
-	// any additional parameters (like charset or boundary information) and normalize
-	// it by stripping whitespace and converting to lowercase before we check the
-	// value.
-	ct := r.Header.Get("Content-Type")
-	if ct != "" {
-		mediaType := strings.ToLower(strings.TrimSpace(strings.Split(ct, ";")[0]))
-		if mediaType != "application/json" {
-			msg := "Content-Type header is not application/json"
-			http.Error(w, msg, http.StatusUnsupportedMediaType)
-			return
-		}
-	}
+	// decode the body contents of the api call and make sure it matches what it should be
+	fmt.Println(r.Body)
 
-	// now create a path in r2, this maxbytes reader may need to be large in the future
-	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
-
-	// Setup the decoder and call the DisallowUnknownFields() method on it.
-	// This will cause Decode() to return a "json: unknown field ..." error
-	// if it encounters any extra unexpected fields in the JSON. Strictly
-	// speaking, it returns an error for "keys which do not match any
-	// non-ignored, exported fields in the destination".
 	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
+
+	var req struct {
+		IV            string `json:"iv"`
+		Salt          string `json:"salt"`
+		EncryptedData string `json:"encryptedData"`
+		FileName      string `json:"fileName"`
+		FileType      string `json:"fileType"`
+	}
+	if err := dec.Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	fmt.Printf("Got EncryptedPackage: %+v\n", req)
+
+	// write back to the frontend status 200 and the sub
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "ok",
+		"sub":    sub,
+	})
 
 }
