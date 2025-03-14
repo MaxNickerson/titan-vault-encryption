@@ -49,10 +49,9 @@ func NewR2Service() (*S3Service, error) {
 // Function to upload file to Cloudflare R2 Storage
 func (s *S3Service) UploadFileToR2(ctx context.Context, key string, file []byte) error {
 	input := &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(file),
-		ContentType: aws.String("image/jpeg"),
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+		Body:   bytes.NewReader(file),
 	}
 
 	// Upload the file

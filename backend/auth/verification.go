@@ -1,8 +1,13 @@
 package auth
 
 import (
+	url "backend/url"
+	"bytes"
+	"context"
+	"encoding/gob" // this can encode structs to an array of bytes and decode it as well
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -84,10 +89,12 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 
 // ReturnSub verifies the ID token and extracts the "sub" claim.
 func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
-	// s3Service, err := url.NewR2Service()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// gets the access token from the request header
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -135,7 +142,7 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 	// json.NewEncoder(w).Encode(sub)
 
 	// decode the body contents of the api call and make sure it matches what it should be
-	fmt.Println(r.Body)
+	// fmt.Println(r.Body)
 
 	dec := json.NewDecoder(r.Body)
 
@@ -150,7 +157,7 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	fmt.Printf("Got EncryptedPackage: %+v\n", req)
+	// fmt.Printf("Got EncryptedPackage: %+v\n", req)
 
 	// write back to the frontend status 200 and the sub
 	w.Header().Set("Content-Type", "application/json")
@@ -159,5 +166,22 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 		"status": "ok",
 		"sub":    sub,
 	})
+
+	// stand in var, Normally enc and dec would be
+	// bound to network connections and the encoder and decoder would
+	// run in different processes.
+	var network bytes.Buffer
+	enc := gob.NewEncoder(&network)
+
+	err = enc.Encode(req)
+	if err != nil {
+		log.Fatal("encode error:", err)
+	}
+
+	// Upload a sample file
+	err = s3Service.UploadFileToR2(context.TODO(), sub+"/"+req.FileName, network.Bytes())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 }
