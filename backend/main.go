@@ -45,7 +45,7 @@ func main() {
 
 	// Protected routes
 	mux.HandleFunc("/verify", auth.TokenVerify)
-	mux.HandleFunc("/subextract", auth.ReturnSub)
+	mux.HandleFunc("/upload", auth.VerifyAndUpload)
 
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
@@ -221,7 +221,7 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := "28bk3ok0246oodeorj8l5ikk6c"
+	clientID := os.Getenv("COGNITO_APP_CLIENT_ID")
 	region := "us-east-1"
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
@@ -241,11 +241,12 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 			"SMS_MFA_CODE": req.MfaCode,
 		},
 	}
-
 	resp, err := cip.RespondToAuthChallenge(context.TODO(), respondInput)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to respond to MFA challenge: %v", err), http.StatusUnauthorized)
+		// fmt.Println("Error here")
 		return
+
 	}
 
 	if resp.AuthenticationResult == nil {

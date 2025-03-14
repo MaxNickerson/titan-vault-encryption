@@ -83,7 +83,11 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 // ReturnSub verifies the ID token and extracts the "sub" claim.
-func ReturnSub(w http.ResponseWriter, r *http.Request) {
+func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
+	// s3Service, err := url.NewR2Service()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 	// gets the access token from the request header
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -127,8 +131,33 @@ func ReturnSub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Println("\n" + sub)
-	// fmt.Fprintf(w, sub)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(sub)
+	// w.Header().Set("Content-Type", "application/json")
+	// json.NewEncoder(w).Encode(sub)
+
+	// If the Content-Type header is present, check that it has the value
+	// application/json. Note that we parse and normalize the header to remove
+	// any additional parameters (like charset or boundary information) and normalize
+	// it by stripping whitespace and converting to lowercase before we check the
+	// value.
+	ct := r.Header.Get("Content-Type")
+	if ct != "" {
+		mediaType := strings.ToLower(strings.TrimSpace(strings.Split(ct, ";")[0]))
+		if mediaType != "application/json" {
+			msg := "Content-Type header is not application/json"
+			http.Error(w, msg, http.StatusUnsupportedMediaType)
+			return
+		}
+	}
+
+	// now create a path in r2, this maxbytes reader may need to be large in the future
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576)
+
+	// Setup the decoder and call the DisallowUnknownFields() method on it.
+	// This will cause Decode() to return a "json: unknown field ..." error
+	// if it encounters any extra unexpected fields in the JSON. Strictly
+	// speaking, it returns an error for "keys which do not match any
+	// non-ignored, exported fields in the destination".
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
 
 }
