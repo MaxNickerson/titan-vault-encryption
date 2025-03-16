@@ -88,10 +88,15 @@ func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]s3types.Obje
 		return nil, err
 	}
 
-	result := out.Contents
-
-	for idx, val := range result {
-		fmt.Println(idx, ". ", val, "\n")
+	// looking at the specific contents of each key
+	for idx, obj := range out.Contents {
+		// obj.Key is the object "name" in S3. Use aws.ToString to safely convert from *string.
+		fmt.Printf("%d) Key: %s, Size: %d, LastModified: %v\n",
+			idx,
+			aws.ToString(obj.Key),
+			obj.Size,
+			obj.LastModified,
+		)
 	}
 	// return the list of objects from the output
 	return out.Contents, nil
