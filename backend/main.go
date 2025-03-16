@@ -1,8 +1,8 @@
 package main
 
 import (
-	auth "backend/auth"
-	// url "backend/url"
+	// auth "backend/auth"
+	url "backend/url"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,32 +23,33 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	// s3Service, err := url.NewR2Service()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// // Upload a sample file
-	// err = s3Service.UploadFileToR2(context.TODO(), "image.jpg", []byte("test"))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	// list objects with sub
+	out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
+	if err != nil {
+		fmt.Println(err, "hi")
+	}
+	fmt.Println(out)
 
-	mux := http.NewServeMux()
+	// mux := http.NewServeMux()
 
-	// Public routes
-	mux.HandleFunc("/login", loginHandler)
-	mux.HandleFunc("/resendVerification", resendVerificationHandler)
+	// // Public routes
+	// mux.HandleFunc("/login", loginHandler)
+	// mux.HandleFunc("/resendVerification", resendVerificationHandler)
 
-	// New route for responding to MFA challenges
-	mux.HandleFunc("/respondMFA", respondMFAHandler)
+	// // New route for responding to MFA challenges
+	// mux.HandleFunc("/respondMFA", respondMFAHandler)
 
-	// Protected routes
-	mux.HandleFunc("/verify", auth.TokenVerify)
-	mux.HandleFunc("/upload", auth.VerifyAndUpload)
+	// // Protected routes
+	// mux.HandleFunc("/verify", auth.TokenVerify)
+	// mux.HandleFunc("/upload", auth.VerifyAndUpload)
 
-	fmt.Println("Server is running on port 8080")
-	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
+	// fmt.Println("Server is running on port 8080")
+	// log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
 }
 
 // enableCors sets the CORS headers for your React app at http://localhost:3000.

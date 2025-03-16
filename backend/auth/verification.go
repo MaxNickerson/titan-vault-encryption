@@ -178,6 +178,7 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 		log.Fatal("encode error:", err)
 	}
 
+	// fmt.Println(network.Bytes()) // yep its literally just numbers
 	// Upload a sample file
 	err = s3Service.UploadFileToR2(context.TODO(), sub+"/"+req.FileName, network.Bytes())
 	if err != nil {

@@ -11,12 +11,22 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types" // since I use this in my code I have to import
 )
 
 type S3Service struct {
 	s3Client *s3.Client
 	bucket   string
 }
+
+// type Object struct {
+// 	name *string
+// 	size *int64
+// }
+
+// type Client struct {
+// 	options Options
+// }
 
 func NewR2Service() (*S3Service, error) {
 
@@ -63,16 +73,26 @@ func (s *S3Service) UploadFileToR2(ctx context.Context, key string, file []byte)
 	return nil
 }
 
-// func main() {
-// 	// Initialize the Cloudflare R2 service
-// 	s3Service, err := NewR2Service()
-// 	if err != nil {
-// 	 log.Fatal(err)
-// 	}
+// (*s3.ListObjectsV2Output, error)
+func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]s3types.Object, error) {
+	input := &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(sub),
+	}
 
-// 	// Upload a sample file
-// 	err = s3Service.UploadFileToR2(context.TODO(), "image.jpg", []byte("test"))
-// 	if err != nil {
-// 	 log.Fatal(err)
-// 	}
-// }
+	// yes
+	out, err := s.s3Client.ListObjectsV2(ctx, input)
+
+	// if error return nil for the output
+	if err != nil {
+		return nil, err
+	}
+
+	result := out.Contents
+
+	for idx, val := range result {
+		fmt.Println(idx, ". ", val, "\n")
+	}
+	// return the list of objects from the output
+	return out.Contents, nil
+}
