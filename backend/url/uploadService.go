@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types" // since I use this in my code I have to import
+	// GetObjectOutput "github.com/aws/aws-sdk-go-v2/service/s3/GetObjectOutput"
 )
 
 type S3Service struct {
@@ -91,13 +93,38 @@ func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]s3types.Obje
 	// looking at the specific contents of each key
 	for idx, obj := range out.Contents {
 		// obj.Key is the object "name" in S3. Use aws.ToString to safely convert from *string.
-		fmt.Printf("%d) Key: %s, Size: %d, LastModified: %v\n",
+		fmt.Printf("%d) Key: %s, eTag: %d, Size: %d, LastModified: %v\n",
 			idx,
 			aws.ToString(obj.Key),
+			obj.ETag,
 			obj.Size,
 			obj.LastModified,
 		)
 	}
 	// return the list of objects from the output
 	return out.Contents, nil
+}
+
+func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*s3.GetObjectOutput, error) {
+	input := &s3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(obj_name),
+	}
+
+	// get the object with the given information, bucket/name_of_file.jpg
+	out, err := s.s3Client.GetObject(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	defer out.Body.Close() // close io stream
+
+	// Read all the data
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, err
+	}
+	// Print the data as a string (if it's textual) or inspect the byte slice
+	fmt.Println(string(data))
+
+	return out, nil
 }

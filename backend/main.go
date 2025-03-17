@@ -28,12 +28,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// list objects with sub
-	out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
-	if err != nil {
-		fmt.Println(err, "hi")
+	// // list objects with sub
+	// out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
+	// if err != nil {
+	// 	fmt.Println(err, "hi")
+	// }
+	// fmt.Println(out)
+
+	out2, err2 := s3Service.GetObject(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/unknown (53).png")
+	if err2 != nil {
+		fmt.Println(err2, "helo")
 	}
-	fmt.Println(out)
+	defer out2.Body.Close()
 
 	// mux := http.NewServeMux()
 
