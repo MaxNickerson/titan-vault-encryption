@@ -3,6 +3,9 @@ package url
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
+
+	// "encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -21,14 +24,13 @@ type S3Service struct {
 	bucket   string
 }
 
-// type Object struct {
-// 	name *string
-// 	size *int64
-// }
-
-// type Client struct {
-// 	options Options
-// }
+type EncryptedPackage struct {
+	IV            string `json:"iv"`
+	Salt          string `json:"salt"`
+	EncryptedData string `json:"encryptedData"`
+	FileName      string `json:"fileName"`
+	FileType      string `json:"fileType"`
+}
 
 func NewR2Service() (*S3Service, error) {
 
@@ -105,7 +107,7 @@ func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]s3types.Obje
 	return out.Contents, nil
 }
 
-func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*s3.GetObjectOutput, error) {
+func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*EncryptedPackage, error) {
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(obj_name),
@@ -116,6 +118,7 @@ func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*s3.GetObje
 	if err != nil {
 		return nil, err
 	}
+
 	defer out.Body.Close() // close io stream
 
 	// Read all the data
@@ -123,8 +126,32 @@ func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*s3.GetObje
 	if err != nil {
 		return nil, err
 	}
-	// Print the data as a string (if it's textual) or inspect the byte slice
-	fmt.Println(string(data))
 
-	return out, nil
+	fmt.Printf("Retrieved object: %s, content type: %s, size %d bytes\n",
+		obj_name,
+		aws.ToString(out.ContentType),
+		*out.ContentLength)
+	// Print the data as bytes
+	// fmt.Println(data)
+	var network bytes.Buffer
+	// Write data to the buffer first
+	network.Write(data)
+
+	// Create a decoder from the buffer
+	dec := gob.NewDecoder(&network)
+
+	var encPkg EncryptedPackage
+
+	// You need a variable of the correct type to decode into
+	err = dec.Decode(encPkg)
+	if err != nil {
+		fmt.Println("Error decoding gob data:", err)
+	} else {
+		fmt.Printf("Decoded object:, %s\nFile type, %s\nIV: %s\nSalt: %s",
+			encPkg.FileName, encPkg.FileType, encPkg.IV, encPkg.Salt)
+	}
+
+	// should return a json map of the encrypted package back
+	return &encPkg, nil
+
 }

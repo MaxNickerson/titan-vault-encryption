@@ -7,18 +7,21 @@ const BucketTest = () => {
     // const subId = localStorage.getItem("subId");
     const [errorMessage, setErrorMessage] = useState("");
     const [sub, setSub] = useState<string | null>(null);
-
+    const fileName = "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/unknown (53).png"
+    const packageData = {
+      fileName
+    };
     useEffect(() => {
         // if no token found, redirect to login page
         const fetchSub = async () => {          
             try {
-            const response = await fetch("http://localhost:8080/subextract", {
+            const response = await fetch("http://localhost:8080/downloadPackage", {
                 method: "POST",
                 headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${idToken}`,
-                
                 },
+                body: JSON.stringify(packageData),
             });
         
             if (response.ok) {

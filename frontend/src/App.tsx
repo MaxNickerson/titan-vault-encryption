@@ -37,7 +37,7 @@ const App: React.FC = () => {
           HEAD used <ProtectedRoute> for /bucket, so let's keep that for now:
         */}
         <Route
-          path="/bucket"
+          path="/download"
           element={
             <ProtectedRoute>
               <BucketTest />

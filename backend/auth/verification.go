@@ -12,23 +12,32 @@ import (
 	"os"
 	"strings"
 
+	"github.com/golang-jwt/jwt/v5"
 	cognitoJwtVerify "github.com/jhosan7/cognito-jwt-verify"
 )
 
-// TokenVerify checks if the ID token is valid AND if the user's email is verified.
-func TokenVerify(w http.ResponseWriter, r *http.Request) {
+type EncryptedPackage struct {
+	IV            string `json:"iv"`
+	Salt          string `json:"salt"`
+	EncryptedData string `json:"encryptedData"`
+	FileName      string `json:"fileName"`
+	FileType      string `json:"fileType"`
+}
+
+type payload jwt.Claims
+
+func verifyJWT(w http.ResponseWriter, authHeader string) payload {
 	// gets the access token from the request header
-	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
-		return
+		return nil
 	}
 
 	// splits the auth header to make sure the first part has bearer included in it
 	parts := strings.Split(authHeader, " ")
 	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
 		http.Error(w, "Invalid Authorization header format", http.StatusUnauthorized)
-		return
+		return nil
 	}
 	tokenString := parts[1] // this is the actual bearer token base64 encrypted
 
@@ -39,24 +48,34 @@ func TokenVerify(w http.ResponseWriter, r *http.Request) {
 		TokenUse:   "id",
 	}
 
-	// fmt.Println(cognitoConfig)
 	// creates a verifier with the config we created
 	verifier, err := cognitoJwtVerify.Create(cognitoConfig)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to create verifier: %v", err), http.StatusInternalServerError)
-		return
+		return nil
 	}
 
-	// verify the token using the cognito verifier
-	// this checks signature, expiration, and other JWT claims
-	claimsInterface, err := verifier.Verify(tokenString)
+	// creates a payload that contains all of the relevant information in the token
+	payload, err := verifier.Verify(tokenString)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
+		return nil
+	}
+
+	return payload
+}
+
+// TokenVerify checks if the ID token is valid AND if the user's email is verified.
+func TokenVerify(w http.ResponseWriter, r *http.Request) {
+	// gets the access token from the request header
+	authHeader := r.Header.Get("Authorization")
+	payload := verifyJWT(w, authHeader)
+	if payload == nil {
 		return
 	}
 	// convert the claims interface to JSON so we can access individual fields
 	// first marshal the interface to a JSON byte array
-	raw, err := json.Marshal(claimsInterface)
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to marshal claims: %v", err), http.StatusInternalServerError)
 		return
@@ -97,37 +116,10 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 
 	// gets the access token from the request header
 	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		http.Error(w, "Missing Authorization header", http.StatusUnauthorized)
-		return
-	}
 
-	// splits the auth header to make sure the first part has bearer included in it
-	parts := strings.Split(authHeader, " ")
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		http.Error(w, "Invalid Authorization header format", http.StatusUnauthorized)
-		return
-	}
-	tokenString := parts[1] // this is the actual bearer token base64 encrypted
-
-	// makes a cognito config that matches what we use to verify a user
-	cognitoConfig := cognitoJwtVerify.Config{
-		UserPoolId: os.Getenv("COGNITO_USER_POOL_ID"),
-		ClientId:   os.Getenv("COGNITO_APP_CLIENT_ID"),
-		TokenUse:   "id",
-	}
-
-	// creates a verifier with the config we created
-	verifier, err := cognitoJwtVerify.Create(cognitoConfig)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to create verifier: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	// creates a payload that contains all of the relevant information in the token
-	payload, err := verifier.Verify(tokenString)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Token verification failed: %v", err), http.StatusUnauthorized)
+	// calls the method verify JWT which checks the token validation
+	payload := verifyJWT(w, authHeader)
+	if payload == nil {
 		return
 	}
 
@@ -146,13 +138,7 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 
 	dec := json.NewDecoder(r.Body)
 
-	var req struct {
-		IV            string `json:"iv"`
-		Salt          string `json:"salt"`
-		EncryptedData string `json:"encryptedData"`
-		FileName      string `json:"fileName"`
-		FileType      string `json:"fileType"`
-	}
+	var req EncryptedPackage
 	if err := dec.Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -185,4 +171,42 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
+}
+
+func DownloadPackage(w http.ResponseWriter, r *http.Request) {
+	// this will intake, idtoken and then what file they are attempting to access (i.e. user-sub/filename.png)
+	// s3Service, err := url.NewR2Service()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// gets the access token from the request header
+	authHeader := r.Header.Get("Authorization")
+
+	payload := verifyJWT(w, authHeader)
+	if payload == nil {
+		return
+	}
+
+	// from the payload variable it has a method to grab the subject, sub
+	sub, err := payload.GetSubject()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("No sub in token: %v", err), http.StatusUnauthorized)
+		return
+	}
+
+	// create a struct of what the request should look like
+	var body struct {
+		FileName string `json:"fileName"`
+	}
+
+	// create a json decoder
+	dec := json.NewDecoder(r.Body)
+
+	if err := dec.Decode(&body); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Println("body of json req:", body, "\nIDTOKEN sub:", sub)
 }
