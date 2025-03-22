@@ -34,9 +34,9 @@ func NewR2Service() (*S3Service, error) {
 
 	// var accountId = os.Getenv("ACCESS_KEY_ID")
 	bucketName := "test-bucket"
-	accessKeyId := os.Getenv("ACCESS_KEY_ID")
-	accessKeySecret := os.Getenv("SECRET_ACCESS_KEY")
-	accountId := os.Getenv("CLOUDFLARE_ACCOUNT_ID")
+	accessKeyId := os.Getenv("CLOUDFLARE_R2_ACCESS_KEY_ID")
+	accessKeySecret := os.Getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+	accountId := os.Getenv("CLOUDFLARE_R2_ACCOUNT_ID")
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyId, accessKeySecret, "")),

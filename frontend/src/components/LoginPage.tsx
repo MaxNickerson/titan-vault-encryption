@@ -21,7 +21,7 @@ const LoginPage: React.FC = () => {
     const savedAccessToken = localStorage.getItem("accessToken");
     const savedRefreshToken = localStorage.getItem("refreshToken");
     if (savedIdToken && savedAccessToken && savedRefreshToken) {
-      navigate("/encryption");
+      navigate("/dashboard");
     }
   }, [navigate]);
 
@@ -71,7 +71,7 @@ const LoginPage: React.FC = () => {
         localStorage.setItem("refreshToken", data.RefreshToken);
         localStorage.setItem("email", email);
 
-        navigate("/encryption");
+        navigate("/dashboard");
       } else {
         // If no tokens, show error (unlikely unless there's a custom scenario)
         setErrorMessage("Login response invalid");
@@ -114,7 +114,7 @@ const LoginPage: React.FC = () => {
 
       // Clear MFA popup and navigate
       setShowMfaPopup(false);
-      navigate("/encryption");
+      navigate("/dashboard");
     } catch (error) {
       console.error("MFA submission error:", error);
       setErrorMessage("An error occurred during MFA submission");
