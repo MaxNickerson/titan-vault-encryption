@@ -7,6 +7,7 @@ import ConfirmationPage from "./components/ConfirmationPage";
 import EncryptionPage from "./components/EncryptionPage";
 import BucketTest from "./components/BucketTest";
 import ProtectedRoute from "./components/ProtectedRoute";
+import DashboardPage from "./components/DashboardPage";
 
 const App: React.FC = () => {
   return (
@@ -31,7 +32,7 @@ const App: React.FC = () => {
             </ProtectedRoute>
           }
         /> */}
-        <Route path="/encryption" element={<EncryptionPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
 
         {/*
           HEAD used <ProtectedRoute> for /bucket, so let's keep that for now:

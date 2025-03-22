@@ -1,8 +1,8 @@
 package main
 
 import (
-	// auth "backend/auth"
-	url "backend/url"
+	"backend/auth"
+	//"backend/url"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -23,33 +23,39 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	s3Service, err := url.NewR2Service()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// s3Service, err := url.NewR2Service()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	// list objects with sub
-	out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
-	if err != nil {
-		fmt.Println(err, "hi")
-	}
-	fmt.Println(out)
+	// // list objects with sub
+	// out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
+	// if err != nil {
+	// 	fmt.Println(err, "hi")
+	// }
+	// fmt.Println(out)
 
-	// mux := http.NewServeMux()
+	// out2, err2 := s3Service.GetObject(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/unknown (53).png")
+	// if err2 != nil {
+	// 	fmt.Println(err2, "helo")
+	// }
+	// defer out2.Body.Close()
 
-	// // Public routes
-	// mux.HandleFunc("/login", loginHandler)
-	// mux.HandleFunc("/resendVerification", resendVerificationHandler)
+	mux := http.NewServeMux()
+
+	// Public routes
+	mux.HandleFunc("/login", loginHandler)
+	mux.HandleFunc("/resendVerification", resendVerificationHandler)
 
 	// // New route for responding to MFA challenges
-	// mux.HandleFunc("/respondMFA", respondMFAHandler)
+	mux.HandleFunc("/respondMFA", respondMFAHandler)
 
 	// // Protected routes
-	// mux.HandleFunc("/verify", auth.TokenVerify)
-	// mux.HandleFunc("/upload", auth.VerifyAndUpload)
+	mux.HandleFunc("/verify", auth.TokenVerify)
+	mux.HandleFunc("/upload", auth.VerifyAndUpload)
 
-	// fmt.Println("Server is running on port 8080")
-	// log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
+	fmt.Println("Server is running on port 8080")
+	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
 }
 
 // enableCors sets the CORS headers for your React app at http://localhost:3000.

@@ -23,7 +23,7 @@ const LandingPage = () => {
 
   const handleUseCurrentLogin = () => {
     setShowPopup(false); // Close the popup
-    navigate("/encryption"); // Redirect to the protected page
+    navigate("/dashboard"); // Redirect to the protected page
   };
 
   
