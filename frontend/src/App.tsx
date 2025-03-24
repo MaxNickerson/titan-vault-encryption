@@ -34,9 +34,15 @@ const App: React.FC = () => {
         /> */}
         <Route path="/dashboard" element={<DashboardPage />} />
 
-        {/*
-          HEAD used <ProtectedRoute> for /bucket, so let's keep that for now:
-        */}
+        <Route
+          path="/encryption"
+          element={
+            <ProtectedRoute>
+              <EncryptionPage />
+            </ProtectedRoute>
+          }
+        />
+       
         <Route
           path="/download"
           element={
