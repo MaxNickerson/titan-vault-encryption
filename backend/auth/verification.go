@@ -175,10 +175,10 @@ func VerifyAndUpload(w http.ResponseWriter, r *http.Request) {
 
 func DownloadPackage(w http.ResponseWriter, r *http.Request) {
 	// this will intake, idtoken and then what file they are attempting to access (i.e. user-sub/filename.png)
-	// s3Service, err := url.NewR2Service()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// gets the access token from the request header
 	authHeader := r.Header.Get("Authorization")
@@ -208,5 +208,15 @@ func DownloadPackage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("body of json req:", body, "\nIDTOKEN sub:", sub)
+	sep := strings.Split(body.FileName, "/")[0]
+	if sep != sub {
+		http.Error(w, "Unmatching Sub Token", http.StatusForbidden)
+	}
+
+	encPkg, err := s3Service.GetObject(context.TODO(), body.FileName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Issue exracting object: %v", err), http.StatusInternalServerError)
+	}
+
+	fmt.Println(encPkg.FileName)
 }

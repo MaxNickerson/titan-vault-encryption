@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
-
-	// "encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -143,7 +141,7 @@ func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*EncryptedP
 	var encPkg EncryptedPackage
 
 	// You need a variable of the correct type to decode into
-	err = dec.Decode(encPkg)
+	err = dec.Decode(&encPkg)
 	if err != nil {
 		fmt.Println("Error decoding gob data:", err)
 	} else {
