@@ -218,5 +218,5 @@ func DownloadPackage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Issue exracting object: %v", err), http.StatusInternalServerError)
 	}
 
-	fmt.Println(encPkg.FileName)
+	json.NewEncoder(w).Encode(encPkg)
 }

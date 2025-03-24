@@ -12,7 +12,7 @@ const BucketTest = () => {
       fileName
     };
     useEffect(() => {
-        // if no token found, redirect to login page
+        // if no token found redirect to login page
         const fetchSub = async () => {          
             try {
             const response = await fetch("http://localhost:8080/downloadPackage", {

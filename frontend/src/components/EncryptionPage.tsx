@@ -148,35 +148,76 @@ const EncryptionPage = () => {
     }
   };
 
-  // Decrypt the file using the EncryptionUtils class
+  // decrypt the file from R2 using the EncryptionUtils class
   const handleDecryptFile = async () => {
-    if (encryptedPackage) {
-      try {
-        const password = "myTestPassword123";
-        // Convert the stored Base64 values back to ArrayBuffers/Uint8Arrays
-        const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
-        const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
-        const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
+    // get variables needed to access object from R2 bucket
+    const idToken = localStorage.getItem("idToken");
+    if (!idToken) {
+      console.error("No ID Token found in local storage.");
+      return
+    }
+    const fileName = "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/HGIH WUALITY PFP.jpg"
+    const packageData = {
+      fileName
+    };
+  
+    // Convert the stored Base64 values back to ArrayBuffers/Uint8Arrays
+    try {
+      const response = await fetch("http://localhost:8080/downloadPackage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Put the token in the Authorization header
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(packageData),
+      });
+    
 
-        // Decrypt using the encryption utility
-        const decryptedBuffer = await encryptionUtils.decryptData(
-          encryptedData,
-          password,
-          salt,
-          iv
-        );
-        setDecryptedData(decryptedBuffer);
-        console.log("Decrypted file data:", new Uint8Array(decryptedBuffer));
+      if (!response.ok) {
+      
+        const errorText = await response.text();
+        console.error("Download of encrypted package failed:", errorText);
+        return;
+      }
+      
+      // Parse the response data
+      const encryptedPackage = await response.json();
+      console.log("Received package:", encryptedPackage);
 
-        // Create a Blob from the decrypted data and generate a URL for display/download
-        const blob = new Blob([decryptedBuffer], { type: encryptedPackage.fileType });
-        const url = URL.createObjectURL(blob);
-        setDecryptedFileUrl(url);
+      if (!encryptedPackage.iv || !encryptedPackage.salt || !encryptedPackage.encryptedData) {
+      console.error("Incomplete encrypted package received:", encryptedPackage);
+      return;
+      }
+      
+      // Convert the base64 strings back to Uint8Arrays for iv and salt and ArrayBuffer for encryptedData
+      const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
+      const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
+      const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
+      
+      const password = "myTestPassword123";
+
+       // Decrypt using the encryption utility
+      const decryptedBuffer = await encryptionUtils.decryptData(
+        encryptedData,
+        password,
+        salt,
+        iv
+      );
+      
+      setDecryptedData(decryptedBuffer);
+      console.log("Decrypted file data:", new Uint8Array(decryptedBuffer).slice(0, 20)); // Just show a preview
+      
+      // Create a Blob from the decrypted data and generate a URL for display/download
+      const blob = new Blob([decryptedBuffer], { type: encryptedPackage.fileType });
+      const url = URL.createObjectURL(blob);
+      setDecryptedFileUrl(url);
+
       } catch (error) {
         console.error("Decryption error:", error);
       }
-    }
-  };
+  }
+  
 
 
   return (
