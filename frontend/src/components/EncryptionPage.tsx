@@ -15,6 +15,7 @@ const EncryptionPage = () => {
   } | null>(null);
   const [decryptedData, setDecryptedData] = useState<ArrayBuffer | null>(null);
   const [decryptedFileUrl, setDecryptedFileUrl] = useState<string | null>(null);
+  const [isFileSelected, setIsFileSelected] = useState(false);
 
   
 
@@ -63,28 +64,87 @@ const EncryptionPage = () => {
     }
   };
 
-  const handleEncryptFile = async () => {
-    if(fileData) {
-      try {
-        const password = "myTestPassword123"
-        // call the utility class
-        const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
-          fileData,
-          password
-        );
+  // const handleEncryptFile = async () => {
+  //   if(fileData) {
+  //     try {
+  //       const password = "myTestPassword123"
+  //       // call the utility class
+  //       const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
+  //         fileData,
+  //         password
+  //       );
 
-        const packageData = {
-          iv: arrayBufferToBase64(iv),
-          salt: arrayBufferToBase64(salt),
-          encryptedData: arrayBufferToBase64(encryptedData),
-          fileName,
-          fileType,
-        };
-        setEncryptedPackage(packageData);
-        console.log("Encrypted package:", packageData);
-      } catch (error) {
-        console.error("Encryption error:", error);
+  //       const packageData = {
+  //         iv: arrayBufferToBase64(iv),
+  //         salt: arrayBufferToBase64(salt),
+  //         encryptedData: arrayBufferToBase64(encryptedData),
+  //         fileName,
+  //         fileType,
+  //       };
+  //       setEncryptedPackage(packageData);
+  //       console.log("Encrypted package:", packageData);
+  //     } catch (error) {
+  //       console.error("Encryption error:", error);
+  //     }
+  //   }
+  // };
+
+  const handleEncryptAndUpload = async () => {
+    if (!fileData) {
+      console.error("No file data to encrypt.");
+      return;
+    }
+    
+    try {
+      // 1) Encrypt
+      const password = "myTestPassword123";
+      const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
+        fileData,
+        password
+      );
+  
+      // 2) Convert buffers to base64 for sending over JSON
+      const packageData = {
+        iv: arrayBufferToBase64(iv),
+        salt: arrayBufferToBase64(salt),
+        encryptedData: arrayBufferToBase64(encryptedData),  
+        fileName,
+        fileType,
+      };
+  
+      // Update state if you still want to store it locally
+      setEncryptedPackage(packageData);
+  
+      // 3) Get ID token from localStorage
+      const idToken = localStorage.getItem("idToken");
+      if (!idToken) {
+        console.error("No ID token found in localStorage.");
+        return;
       }
+      
+      // 4) Send encrypted data + ID token to your backend
+      const response = await fetch("http://localhost:8080/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Put the token in the Authorization header
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(packageData),
+      });
+      
+      if (!response.ok) {
+        
+        const errorText = await response.text();
+        console.error("Upload failed:", errorText);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log("Upload successful:", data);
+      // data might contain your "sub" or any server response
+    } catch (error) {
+      console.error("Encryption/Upload error:", error);
     }
   };
 
@@ -132,50 +192,68 @@ const EncryptionPage = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex items-center justify-center flex-grow">
-        <div className="w-1/2 flex flex-col justify-center items-center p-8 bg-white rounded-lg">
-          <h1 className="text-3xl font-bold mb-6">Upload & Encrypt File</h1>
-          <input
-            type="file"
-            onChange={handleFileUpload}
-            className="mb-4 border border-gray-300 rounded-lg p-2 w-full"
-          />
-          <div className="flex space-x-4">
-            <button
-              onClick={handleEncryptFile}
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
-            >
-              Encrypt File
-            </button>
-            <button
-              onClick={handleDecryptFile}
-              className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
-            >
-              Decrypt File
-            </button>
+      <div className="flex flex-col items-center justify-center flex-grow gap-6">
+        {/* File Upload Section */}
+        <div className="bg-white p-6 rounded-lg shadow-md w-full max-w-md">
+          <h2 className="text-xl font-semibold mb-4">Upload File</h2>
+          <div className="mb-4">
+            <label className="block text-gray-700 mb-2">Select a file to encrypt:</label>
+            <input
+              type="file"
+              onChange={handleFileUpload}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            />
           </div>
-
-          {decryptedFileUrl && (
-            <div className="mt-6">
-              <h2 className="text-xl font-semibold mb-4">Decrypted File:</h2>
-              {fileType.startsWith("image/") ? (
-                <img
-                  src={decryptedFileUrl}
-                  alt="Decrypted"
-                  className="max-w-full h-auto"
-                />
-              ) : (
-                <a
-                  href={decryptedFileUrl}
-                  download={fileName}
-                  className="text-blue-500 underline"
-                >
-                  Download {fileName}
-                </a>
-              )}
-            </div>
+          {isFileSelected && (
+            <p className="text-green-600 mb-4">
+              File selected: {fileName}
+            </p>
           )}
         </div>
+
+        {/* Action Buttons */}
+        <div className="flex space-x-4">
+          <button
+            onClick={handleEncryptAndUpload}
+            disabled={!fileData}
+            className={`px-6 py-2 ${
+              !fileData ? "bg-gray-300" : "bg-blue-500 hover:bg-blue-600"
+            } text-white rounded-lg transition`}
+          >
+            Encrypt & Upload File
+          </button>
+          <button
+            onClick={handleDecryptFile}
+            disabled={!encryptedPackage}
+            className={`px-6 py-2 ${
+              !encryptedPackage ? "bg-gray-300" : "bg-gray-500 hover:bg-gray-600"
+            } text-white rounded-lg transition`}
+          >
+            Decrypt File
+          </button>
+        </div>
+
+        {/* Display decrypted file if available */}
+        {decryptedFileUrl && (
+          <div className="mt-6 bg-white p-6 rounded-lg shadow-md w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Decrypted File:</h2>
+            {fileType.startsWith("image/") ? (
+              <img
+                src={decryptedFileUrl}
+                alt="Decrypted"
+                className="max-w-full h-auto"
+              />
+            ) : (
+              <a
+                href={decryptedFileUrl}
+                download={fileName}
+                className="text-blue-500 underline"
+              >
+                Download {fileName}
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

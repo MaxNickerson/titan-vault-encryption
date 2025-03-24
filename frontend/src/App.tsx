@@ -23,13 +23,21 @@ const App: React.FC = () => {
           max’s version had it unprotected. 
           We'll keep max’s approach of no ProtectedRoute for encryption:
         */}
+        {/* <Route
+          path="/encryption"
+          element={
+            <ProtectedRoute>
+              <EncryptionPage />
+            </ProtectedRoute>
+          }
+        /> */}
         <Route path="/encryption" element={<EncryptionPage />} />
 
         {/*
           HEAD used <ProtectedRoute> for /bucket, so let's keep that for now:
         */}
         <Route
-          path="/bucket"
+          path="/download"
           element={
             <ProtectedRoute>
               <BucketTest />

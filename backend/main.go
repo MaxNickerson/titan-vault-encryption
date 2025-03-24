@@ -2,6 +2,7 @@ package main
 
 import (
 	auth "backend/auth"
+	url "backend/url"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,9 +22,28 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-	// url.ListObjects()
+
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// list objects with sub
+	out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
+	if err != nil {
+		fmt.Println(err, "hi")
+	}
+	fmt.Println(out)
+
+	// out2, err2 := s3Service.GetObject(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/unknown (53).png")
+	// if err2 != nil {
+	// 	fmt.Println(err2, "helo")
+	// }
+	// defer out2.Body.Close()
 
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("/downloadPackage", auth.DownloadPackage)
 
 	// Public routes
 	mux.HandleFunc("/login", loginHandler)
@@ -34,7 +54,7 @@ func main() {
 
 	// Protected routes
 	mux.HandleFunc("/verify", auth.TokenVerify)
-	mux.HandleFunc("/subextract", auth.ReturnSub)
+	mux.HandleFunc("/upload", auth.VerifyAndUpload)
 
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))
@@ -210,7 +230,7 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientID := "28bk3ok0246oodeorj8l5ikk6c"
+	clientID := os.Getenv("COGNITO_APP_CLIENT_ID")
 	region := "us-east-1"
 
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
@@ -230,11 +250,12 @@ func respondMFAHandler(w http.ResponseWriter, r *http.Request) {
 			"SMS_MFA_CODE": req.MfaCode,
 		},
 	}
-
 	resp, err := cip.RespondToAuthChallenge(context.TODO(), respondInput)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to respond to MFA challenge: %v", err), http.StatusUnauthorized)
+		// fmt.Println("Error here")
 		return
+
 	}
 
 	if resp.AuthenticationResult == nil {
