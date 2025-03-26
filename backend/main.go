@@ -2,6 +2,7 @@ package main
 
 import (
 	auth "backend/auth"
+
 	// url "backend/url"
 	"context"
 	"encoding/json"
@@ -44,7 +45,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/downloadPackage", auth.DownloadPackage)
-
+	mux.HandleFunc("/listObjects", auth.ListUserObjects)
 	// Public routes
 	mux.HandleFunc("/login", loginHandler)
 	mux.HandleFunc("/resendVerification", resendVerificationHandler)

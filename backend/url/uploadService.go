@@ -13,7 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types" // since I use this in my code I have to import
+	// s3types "github.com/aws/aws-sdk-go-v2/service/s3/types" // since I use this in my code I have to import
 	// GetObjectOutput "github.com/aws/aws-sdk-go-v2/service/s3/GetObjectOutput"
 )
 
@@ -28,6 +28,12 @@ type EncryptedPackage struct {
 	EncryptedData string `json:"encryptedData"`
 	FileName      string `json:"fileName"`
 	FileType      string `json:"fileType"`
+}
+
+type UserObject struct {
+	Key  *string
+	Size *int64
+	// LastModified string
 }
 
 func NewR2Service() (*S3Service, error) {
@@ -76,7 +82,7 @@ func (s *S3Service) UploadFileToR2(ctx context.Context, key string, file []byte)
 }
 
 // (*s3.ListObjectsV2Output, error)
-func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]s3types.Object, error) {
+func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]UserObject, error) {
 	input := &s3.ListObjectsV2Input{
 		Bucket: aws.String(s.bucket),
 		Prefix: aws.String(sub),
@@ -90,19 +96,27 @@ func (s *S3Service) ListObjects(ctx context.Context, sub string) ([]s3types.Obje
 		return nil, err
 	}
 
+	var userObjList []UserObject
 	// looking at the specific contents of each key
-	for idx, obj := range out.Contents {
+	for _, obj := range out.Contents {
 		// obj.Key is the object "name" in S3. Use aws.ToString to safely convert from *string.
-		fmt.Printf("%d) Key: %s, eTag: %d, Size: %d, LastModified: %v\n",
-			idx,
-			aws.ToString(obj.Key),
-			obj.ETag,
-			obj.Size,
-			obj.LastModified,
-		)
+		userObj := UserObject{
+			Key:  obj.Key,
+			Size: obj.Size,
+			// LastModified: obj.LastModified.GoString(),
+		}
+		userObjList = append(userObjList, userObj)
+
+		// fmt.Printf("%d) Key: %s, eTag: %d, Size: %d, LastModified: %v\n",
+		// 	idx,
+		// 	aws.ToString(obj.Key),
+		// 	obj.ETag,
+		// 	obj.Size,
+		// 	obj.LastModified,
+		// )
 	}
 	// return the list of objects from the output
-	return out.Contents, nil
+	return userObjList, nil
 }
 
 func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*EncryptedPackage, error) {
@@ -151,5 +165,4 @@ func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*EncryptedP
 
 	// should return a json map of the encrypted package back
 	return &encPkg, nil
-
 }

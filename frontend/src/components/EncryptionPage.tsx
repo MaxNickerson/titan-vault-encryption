@@ -17,8 +17,6 @@ const EncryptionPage = () => {
   const [decryptedFileUrl, setDecryptedFileUrl] = useState<string | null>(null);
   const [isFileSelected, setIsFileSelected] = useState(false);
 
-  
-
   const navigate = useNavigate();
   const encryptionUtils = new EncryptionUtils();
   // Logout function

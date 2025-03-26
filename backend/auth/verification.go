@@ -220,3 +220,35 @@ func DownloadPackage(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(encPkg)
 }
+
+func ListUserObjects(w http.ResponseWriter, r *http.Request) {
+	// this will intake, idtoken and then what file they are attempting to access (i.e. user-sub/filename.png)
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// gets the access token from the request header
+	authHeader := r.Header.Get("Authorization")
+
+	// calls the method verify JWT which checks the token validation
+	payload := verifyJWT(w, authHeader)
+	if payload == nil {
+		return
+	}
+
+	// from the payload variable it has a method to grab the subject, sub
+	sub, err := payload.GetSubject()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("No sub in token: %v", err), http.StatusUnauthorized)
+		return
+	}
+
+	ArrObjects, err := s3Service.ListObjects(context.TODO(), sub)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("User object-list extraction failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	json.NewEncoder(w).Encode(ArrObjects)
+}
