@@ -1,4 +1,4 @@
-import { verifyJwt } from "../utils/jwt";
+import { verifyJwt } from "../utils/authentication"; // ✅ Updated path
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binary = atob(base64);
@@ -15,7 +15,11 @@ export async function handleUploadFile(request: Request, env: Env): Promise<Resp
     console.log("📦 Upload route hit");
 
     const token = request.headers.get("Authorization")?.split(" ")[1];
-    const claims = await verifyJwt(token);
+    if (!token) {
+      return new Response("Missing Authorization token", { status: 401 });
+    }
+
+    const claims = await verifyJwt(token, env); // ✅ Pass env here
     const sub = claims.sub;
 
     const { hash, encryptedData } = await request.json();
@@ -29,7 +33,10 @@ export async function handleUploadFile(request: Request, env: Env): Promise<Resp
     });
     
     console.log("✅ Stored:", `${sub}/${hash}`);
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
 
   } catch (err) {
     console.error("🔥 Upload failed:", err);

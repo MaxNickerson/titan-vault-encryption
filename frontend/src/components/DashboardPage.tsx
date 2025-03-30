@@ -12,7 +12,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   const bytes = new Uint8Array(buffer);
   bytes.forEach((b) => (binary += String.fromCharCode(b)));
   return window.btoa(binary);
-}
+};
 
 //
 // Utility to convert base64 → ArrayBuffer
@@ -24,7 +24,14 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes.buffer;
-}
+};
+
+type ManifestEntry = {
+  hash: string;
+  fileName: string;
+  fileType: string;
+};
+
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -56,7 +63,49 @@ const DashboardPage: React.FC = () => {
   // --------------------------------------------------
   // Example items in file list
   // --------------------------------------------------
-  const tempItems = ["FileOne.txt", "Photo123.jpg", "SecretDoc.pdf", "Archive.zip"];
+  type ManifestEntry = {
+    hash: string;
+    fileName: string;
+    fileType: string;
+  };
+
+  const [fileList, setFileList] = useState<ManifestEntry[]>([]);
+
+  const loadManifest = async (): Promise<ManifestEntry[]> => {
+    try {
+      const idToken = localStorage.getItem("idToken");
+      const base64Password = localStorage.getItem("masterPassword");
+      if (!idToken || !base64Password) return [];
+  
+      const resp = await fetch("https://api.titanvaultencrypt.com/api/get-manifest", {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+  
+      if (!resp.ok) return [];
+  
+      const { encryptedData, iv } = await resp.json();
+  
+      const rawKey = Uint8Array.from(atob(base64Password), (c) => c.charCodeAt(0));
+      const aesKey = await window.crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["decrypt"]);
+  
+      const decrypted = await window.crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: new Uint8Array(base64ToArrayBuffer(iv)) },
+        aesKey,
+        base64ToArrayBuffer(encryptedData)
+      );
+  
+      const decoded = new TextDecoder().decode(decrypted);
+      const parsed: ManifestEntry[] = JSON.parse(decoded);
+      setFileList(parsed);
+      return parsed;
+    } catch (err) {
+      console.error("Manifest load failed:", err);
+      return [];
+    }
+  };
+  
+
+
 
   // Track which item is currently selected
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
@@ -116,75 +165,73 @@ const DashboardPage: React.FC = () => {
       console.error("No file data to encrypt.");
       return;
     }
-
+  
     try {
       const base64Password = localStorage.getItem("masterPassword");
-      if (!base64Password) {
-        alert("Your user files are locked. Please enter or create a master password first.");
-        return;
-      }
-
-      // Convert the stored base64 password into a CryptoKey
-      const rawKey = Uint8Array.from(atob(base64Password), (c) => c.charCodeAt(0));
-      const aesKey = await window.crypto.subtle.importKey(
-        "raw",
-        rawKey,
-        { name: "AES-GCM" },
-        false,
-        ["encrypt"]
-      );
-
-      // Generate IV
-      const iv = window.crypto.getRandomValues(new Uint8Array(12));
-
-      // Encrypt the file data
-      const encryptedData = await window.crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        aesKey,
-        fileData
-      );
-
-      // We don't need a real salt here since we already derived the key,
-      // but let's pass a placeholder for consistency
-      const saltPlaceholder = encryptionUtils.getSalt();
-
-      // Prepare package data
-      const packageData = {
-        iv: arrayBufferToBase64(iv),
-        salt: arrayBufferToBase64(saltPlaceholder),
-        encryptedData: arrayBufferToBase64(encryptedData),
-        fileName,
-        fileType,
-      };
-
-      // Upload to your existing backend
       const idToken = localStorage.getItem("idToken");
-      if (!idToken) {
-        console.error("No ID token found. User not logged in.");
+      if (!base64Password || !idToken) {
+        alert("You're not authenticated or unlocked.");
         return;
       }
-
-      const response = await fetch("http://localhost:8080/upload", {
+  
+      const password = atob(base64Password);
+      const encryptedWithIv = await encryptionUtils.encryptFileWithIvPrepended(fileData, password);
+      const hash = await encryptionUtils.hashString(fileName); // ✅ define hash here
+  
+      // Upload encrypted file (IV + data) to R2
+      const uploadResp = await fetch("https://api.titanvaultencrypt.com/api/upload-file", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          Authorization: `Bearer ${idToken}`,
+          "x-file-name": hash,
+        },
+        body: encryptedWithIv,
+      });
+  
+      if (!uploadResp.ok) {
+        const errorText = await uploadResp.text();
+        console.error("Upload failed:", errorText);
+        return;
+      }
+  
+      // === Manifest Update ===
+      const currentManifest = await loadManifest(); // already defined globally
+      const newEntry = { hash, fileName, fileType };
+      const updatedManifest = [...currentManifest, newEntry];
+  
+      const manifestEncoded = new TextEncoder().encode(JSON.stringify(updatedManifest));
+      const manifestIv = crypto.getRandomValues(new Uint8Array(12));
+  
+      const rawKey = Uint8Array.from(atob(base64Password), (c) => c.charCodeAt(0));
+      const aesKey = await window.crypto.subtle.importKey("raw", rawKey, "AES-GCM", false, ["encrypt"]);
+  
+      const encryptedManifest = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: manifestIv },
+        aesKey,
+        manifestEncoded
+      );
+  
+      await fetch("https://api.titanvaultencrypt.com/api/upload-manifest", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify(packageData),
+        body: JSON.stringify({
+          iv: arrayBufferToBase64(manifestIv),
+          encryptedData: arrayBufferToBase64(encryptedManifest),
+        }),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Upload failed:", errorText);
-        return;
-      }
-
-      console.log("Upload successful:", await response.json());
+  
+      console.log("Upload + manifest updated!");
       closeEncryptModal();
     } catch (error) {
       console.error("Encryption/Upload error:", error);
     }
   };
+  
+
 
   // --------------------------------------------------
   // Item click => select for preview
@@ -203,17 +250,49 @@ const DashboardPage: React.FC = () => {
   // --------------------------------------------------
   // Download file (future steps)
   // --------------------------------------------------
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!selectedItem) {
       alert("Please select a file to download.");
       return;
     }
-    alert(`Downloading ${selectedItem} ...`);
-    console.log(`User wants to download: ${selectedItem}`);
-    // 1) fetch from R2
-    // 2) decrypt with encryptionUtils
-    // 3) Blob + auto-download
+  
+    try {
+      const idToken = localStorage.getItem("idToken");
+      const base64Password = localStorage.getItem("masterPassword");
+      if (!idToken || !base64Password) throw new Error("Missing credentials");
+  
+      const entry = fileList.find((f) => f.fileName === selectedItem);
+      if (!entry) throw new Error("File not found in manifest");
+  
+      const { hash, fileName } = entry;
+  
+      const response = await fetch(`https://api.titanvaultencrypt.com/api/get-file?hash=${hash}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+  
+      if (!response.ok) throw new Error("Download failed");
+  
+      const encryptedBlob = await response.blob();
+      const encryptedArrayBuffer = await encryptedBlob.arrayBuffer();
+  
+      const password = atob(base64Password);
+      const decrypted = await encryptionUtils.decryptFileWithIvPrepended(encryptedArrayBuffer, password);
+  
+      const blob = new Blob([decrypted]);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      link.click();
+    } catch (err) {
+      console.error("Download/decryption error:", err);
+      alert("Failed to decrypt or download file.");
+    }
   };
+  
+
 
   // --------------------------------------------------
   // On mount => check JWT + masterPassword
@@ -290,7 +369,7 @@ const DashboardPage: React.FC = () => {
       // 3) Upload masterPassword.enc to your Worker at /store-masterpassword
       const idToken = localStorage.getItem("idToken");
       if (idToken) {
-        const uploadResp = await fetch("http://localhost:8787/store-masterpassword", {
+        const uploadResp = await fetch("https://api.titanvaultencrypt.com/api/store-masterpassword", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -307,7 +386,7 @@ const DashboardPage: React.FC = () => {
         }
 
         // 4) Update Cognito attribute => hasMasterPassword = true
-        const updateResp = await fetch("http://localhost:8080/set-master-password", {
+        const updateResp = await fetch("https://api.titanvaultencrypt.com/api/get-masterpassword", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -325,6 +404,7 @@ const DashboardPage: React.FC = () => {
       // Done => close modal, unlock
       setShowCreateModal(false);
       setIsUnlocked(true);
+      await loadManifest();
     } catch (err) {
       setModalError("Error creating master password.");
       console.error(err);
@@ -347,7 +427,7 @@ const DashboardPage: React.FC = () => {
       if (!idToken) throw new Error("No ID token found.");
 
       // 2) Fetch stored masterPassword package from R2
-      const resp = await fetch("http://localhost:8787/masterpassword", {
+      const resp = await fetch("https://api.titanvaultencrypt.com/api/get-masterpassword", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -387,10 +467,12 @@ const DashboardPage: React.FC = () => {
       // Done => close modal, unlock
       setShowEnterModal(false);
       setIsUnlocked(true);
+      await loadManifest();
     } catch (err) {
       console.error("MasterPassword decryption failed:", err);
       setModalError("Incorrect master password.");
     }
+
   };
 
   return (
@@ -419,16 +501,12 @@ const DashboardPage: React.FC = () => {
           <div className="bg-white p-6 rounded-lg shadow-md w-80">
             <h2 className="text-xl font-semibold mb-4">Your Files</h2>
             <ul className="space-y-2">
-              {tempItems.map((item) => (
-                <li key={item}>
-                  <button
-                    onClick={() => handleItemClick(item)}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {item}
-                  </button>
+              {fileList.map((item) => (
+                <li key={item.hash}>
+                  <button onClick={() => handleItemClick(item.fileName)}>{item.fileName}</button>
                 </li>
               ))}
+
             </ul>
           </div>
 
@@ -476,9 +554,8 @@ const DashboardPage: React.FC = () => {
               <button
                 onClick={handleEncryptAndUpload}
                 disabled={!fileData}
-                className={`px-4 py-2 ${
-                  !fileData ? "bg-gray-300" : "bg-blue-600 hover:bg-blue-700"
-                } text-white rounded`}
+                className={`px-4 py-2 ${!fileData ? "bg-gray-300" : "bg-blue-600 hover:bg-blue-700"
+                  } text-white rounded`}
               >
                 Upload
               </button>

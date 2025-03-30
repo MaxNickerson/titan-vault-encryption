@@ -1,10 +1,21 @@
-import { verifyJwt } from "../utils/jwt";
+import { verifyJwt } from "../utils/authentication"; // ✅ Use your Cognito JWT verifier
 
-export async function handleGetFile(request: Request, env: Env, hash: string): Promise<Response> {
+export async function handleGetFile(request: Request, env: Env): Promise<Response> {
   try {
     const token = request.headers.get("Authorization")?.split(" ")[1];
-    const claims = await verifyJwt(token);
+    if (!token) {
+      return new Response("Missing Authorization token", { status: 401 });
+    }
+
+    const claims = await verifyJwt(token, env); // ✅ Pass env here
     const sub = claims.sub;
+
+    const url = new URL(request.url);
+    const hash = url.searchParams.get("hash");
+
+    if (!hash) {
+      return new Response("Missing file hash", { status: 400 });
+    }
 
     const objectKey = `${sub}/${hash}`;
     const obj = await env.R2.get(objectKey);
@@ -20,6 +31,7 @@ export async function handleGetFile(request: Request, env: Env, hash: string): P
       },
     });
   } catch (err) {
+    console.error("Error downloading file:", err);
     return new Response("Error downloading file", { status: 500 });
   }
 }

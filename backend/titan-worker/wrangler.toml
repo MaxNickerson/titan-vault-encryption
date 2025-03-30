@@ -9,3 +9,8 @@ bucket_name = "titan-vault"
 [[routes]]
 pattern = "https://api.titanvaultencrypt.com/api/*"
 zone_name = "titanvaultencrypt.com"
+
+[vars]
+COGNITO_REGION = "us-east-1"
+COGNITO_USER_POOL_ID = "us-east-1_ZSdwAA8FJ"
+COGNITO_CLIENT_ID = "28bk3ok0246oodeorj8l5ikk6c"
