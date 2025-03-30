@@ -17,6 +17,7 @@
 		"wrangler": "^4.5.0"
 	},
 	"dependencies": {
+		"jose": "^6.0.10",
 		"titan-worker": "file:"
 	}
 }
