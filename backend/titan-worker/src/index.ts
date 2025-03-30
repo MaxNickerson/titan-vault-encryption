@@ -4,11 +4,12 @@ import { handleGetManifest } from "./routes/getManifest";
 import { handleGetFile } from "./routes/getFile";
 import { handleStoreMasterKey } from "./routes/storeMasterKey";
 import { handleRetrieveMasterKey } from "./routes/getMasterKey";
-import { withCors } from "./utils/cors"; // ✅ Import your CORS wrapper
+import { withCors } from "./utils/cors";
 import { verifyJwt } from "./utils/authentication";
 import { handleLogin } from "./routes/handleLogin";
 import { handleRespondMFA } from "./routes/handleRespondMFA";
 import { handleListFiles } from "./routes/listFiles";
+import { handleSetMasterPasswordFlag } from "./routes/setMasterPasswordFlag";
 
 
 export interface Env {
@@ -34,54 +35,55 @@ export default {
       });
     }
 
-    // ✅ Wrap each response with withCors()
-
+    // ✅ Auth & Session
     if (method === "POST" && url.pathname === "/api/login") {
-      const res = await handleLogin(request, env); 
-      return withCors(res);
+      return withCors(await handleLogin(request, env));
     }
-    
+
     if (method === "POST" && url.pathname === "/api/respondMFA") {
-      const res = await handleRespondMFA(request, env); 
-      return withCors(res);
+      return withCors(await handleRespondMFA(request, env));
+    }
+
+    if (method === "POST" && url.pathname === "/api/set-masterpassword-flag") {
+      return withCors(await handleSetMasterPasswordFlag(request, env));
     }
     
 
-    if (method === "POST" && url.pathname === "/upload-file") {
-      const res = await handleUploadFile(request, env);
-      return withCors(res);
+    // ✅ Upload / Download / Manifest
+    if (method === "POST" && url.pathname === "/api/upload-file") {
+      return withCors(await handleUploadFile(request, env));
     }
 
-    if (method === "POST" && url.pathname === "/upload-manifest") {
-      const res = await handleUploadManifest(request, env);
-      return withCors(res);
+    if (method === "POST" && url.pathname === "/api/upload-manifest") {
+      return withCors(await handleUploadManifest(request, env));
     }
 
+    if (method === "GET" && url.pathname === "/api/manifest") {
+      return withCors(await handleGetManifest(request, env));
+    }
+
+    if (method === "GET" && url.pathname === "/api/file") {
+      return withCors(await handleGetFile(request, env));
+    }
+
+    // ✅ Master Key Storage
     if (method === "POST" && url.pathname === "/api/store-masterkey") {
-      const res = await handleStoreMasterKey(request, env);
-      return withCors(res);
+      return withCors(await handleStoreMasterKey(request, env));
     }
 
-    if (method === "GET" && url.pathname === "/api/retrieve-masterkey") {
-      const res = await handleRetrieveMasterKey(request, env);
-      return withCors(res);
+    if (method === "GET" && url.pathname === "/api/get-masterpassword") {
+      return withCors(await handleRetrieveMasterKey(request, env));
     }
 
-    if (method === "GET" && url.pathname === "/manifest") {
-      const res = await handleGetManifest(request, env);
-      return withCors(res);
-    }
-
-    if (method === "GET" && url.pathname === "/file") {
-      const res = await handleGetFile(request, env);
-      return withCors(res);
-    }    
-
+    // ✅ List R2 contents (optional admin/debug)
     if (method === "GET" && url.pathname === "/api/list") {
-      const res = await handleListFiles(request, env);
-      return withCors(res);
+      return withCors(await handleListFiles(request, env));
     }
-    
-    return withCors(new Response("Not Found", { status: 404 }));
+
+    // ✅ Fallback route
+    return withCors(new Response(JSON.stringify({ error: "Not Found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    }));
   },
 };

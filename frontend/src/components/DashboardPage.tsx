@@ -306,22 +306,19 @@ const DashboardPage: React.FC = () => {
       navigate("/login");
       return;
     }
+  
     try {
       const payload = JSON.parse(atob(token.split(".")[1]));
-      const hasMP = payload.hasMasterPassword === "true";
+      const hasMP = payload["custom:hasMasterPassword"] === "true";
       const storedPass = localStorage.getItem("masterPassword");
-
-      // If user has a master password set...
+  
       if (hasMP) {
-        // If we already have masterPassword in localStorage => skip modal
         if (storedPass) {
           setIsUnlocked(true);
         } else {
-          // Otherwise, prompt user to enter existing master password
           setShowEnterModal(true);
         }
       } else {
-        // No master password => create flow
         setShowCreateModal(true);
       }
     } catch (err) {
@@ -329,10 +326,8 @@ const DashboardPage: React.FC = () => {
       navigate("/login");
     }
   }, [navigate]);
+  
 
-  // --------------------------------------------------
-  // Create Master Password
-  // --------------------------------------------------
   const handleCreateMasterPassword = async () => {
     setModalError("");
     if (!newPassword || !confirmPassword) {
@@ -343,76 +338,60 @@ const DashboardPage: React.FC = () => {
       setModalError("Passwords do not match.");
       return;
     }
-
+  
     try {
-      // 1) Encrypt the newly created master password => encryptedPassword
-      const { encryptedKey, salt: passSalt, iv: passIv } =
-        await encryptionUtils.encryptMasterKey(newPassword);
-
-      // We'll rename 'encryptedKey' -> 'encryptedPassword' for clarity
-      const encryptedPassword = encryptedKey;
-
+      const { encryptedKey, salt: passSalt } = await encryptionUtils.encryptMasterKey(newPassword);
+  
       const toBase64 = (buf: ArrayBuffer | Uint8Array) =>
         btoa(String.fromCharCode(...new Uint8Array(buf)));
-
-      // Prepare the data to store in R2
+  
       const masterPasswordPayload = {
-        encryptedPassword: toBase64(encryptedPassword),
+        encryptedMasterKey: toBase64(encryptedKey),
         salt: toBase64(passSalt),
-        iv: toBase64(passIv),
       };
-
-      // 2) Also store a usable local version
+  
       const passwordKey = encryptionUtils.getPasswordKey(newPassword);
       const derivedKey = await encryptionUtils.deriveKey(passwordKey, passSalt);
       const rawKey = await window.crypto.subtle.exportKey("raw", derivedKey);
       const base64Password = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
       localStorage.setItem("masterPassword", base64Password);
-
-      // 3) Upload masterPassword.enc to your Worker at /store-masterpassword
+  
       const idToken = localStorage.getItem("idToken");
-      if (idToken) {
-        const uploadResp = await fetch("https://api.titanvaultencrypt.com/api/store-masterpassword", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify(masterPasswordPayload),
-        });
-
-        if (!uploadResp.ok) {
-          const errorText = await uploadResp.text();
-          console.error("Failed to store encrypted masterPassword:", errorText);
-        } else {
-          console.log("MasterPassword securely stored in R2!");
-        }
-
-        // 4) Update Cognito attribute => hasMasterPassword = true
-        const updateResp = await fetch("https://api.titanvaultencrypt.com/api/get-masterpassword", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-        });
-
-        if (!updateResp.ok) {
-          console.error("Failed to update hasMasterPassword in Cognito");
-        } else {
-          console.log("Cognito user attribute updated to hasMasterPassword = true");
-        }
+      if (!idToken) throw new Error("Missing ID token");
+  
+      const uploadResp = await fetch("https://api.titanvaultencrypt.com/api/store-masterkey", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(masterPasswordPayload),
+      });
+      
+      if (!uploadResp.ok) {
+        const text = await uploadResp.text();
+        throw new Error(`❌ Store failed: ${text}`);
       }
-
-      // Done => close modal, unlock
+      
+      let result;
+      try {
+        result = await uploadResp.json();
+        console.log("✅", result.message);
+      } catch {
+        console.warn("⚠️ Store response was not JSON");
+      }
+      
+  
       setShowCreateModal(false);
       setIsUnlocked(true);
       await loadManifest();
     } catch (err) {
       setModalError("Error creating master password.");
-      console.error(err);
+      console.error("❌ Master password creation error:", err);
     }
   };
+  
+  
 
   // --------------------------------------------------
   // Enter Master Password => fetch & decrypt masterPassword.enc
@@ -423,38 +402,41 @@ const DashboardPage: React.FC = () => {
       setModalError("Please enter your master password.");
       return;
     }
-
+  
     try {
-      // 1) Get token
       const idToken = localStorage.getItem("idToken");
-      if (!idToken) throw new Error("No ID token found.");
-
-      // 2) Fetch stored masterPassword package from R2
+      if (!idToken) throw new Error("Missing ID token");
+  
       const resp = await fetch("https://api.titanvaultencrypt.com/api/get-masterpassword", {
         method: "GET",
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
       });
-
-      if (!resp.ok) throw new Error("Failed to retrieve master password from server");
-
+  
+      if (!resp.ok) throw new Error("Failed to retrieve encrypted key from R2");
+  
       const data = await resp.json();
-
-      // Convert base64 fields
+      const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
+        const binary = window.atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+      };
+  
       const encryptedPasswordBuf = base64ToArrayBuffer(data.encryptedPassword);
       const salt = new Uint8Array(base64ToArrayBuffer(data.salt));
       const iv = new Uint8Array(base64ToArrayBuffer(data.iv));
-
-      // 3) Decrypt masterPassword using user's password
+  
       const decrypted = await encryptionUtils.decryptMasterKey(
         encryptedPasswordBuf,
         existingPassword,
         salt,
         iv
       );
-
-      // 4) Import raw decrypted password => store as base64
+  
       const derivedKey = await window.crypto.subtle.importKey(
         "raw",
         decrypted,
@@ -462,12 +444,11 @@ const DashboardPage: React.FC = () => {
         false,
         ["encrypt", "decrypt"]
       );
-
+  
       const rawKey = await window.crypto.subtle.exportKey("raw", derivedKey);
       const base64Password = btoa(String.fromCharCode(...new Uint8Array(rawKey)));
       localStorage.setItem("masterPassword", base64Password);
-
-      // Done => close modal, unlock
+  
       setShowEnterModal(false);
       setIsUnlocked(true);
       await loadManifest();
@@ -475,8 +456,8 @@ const DashboardPage: React.FC = () => {
       console.error("MasterPassword decryption failed:", err);
       setModalError("Incorrect master password.");
     }
-
   };
+  
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-blue-100 to-gray-100">
