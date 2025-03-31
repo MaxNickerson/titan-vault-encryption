@@ -1,6 +1,4 @@
-// src/components/DashboardPage.tsx
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { EncryptionUtils } from "../encryption/encryptionUtils";
 
@@ -11,6 +9,21 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
+function base64ToArrayBuffer(base64: string) {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// Define the type for objects returned from the backend
+type UserObjectType = {
+  Key: string;
+  Size: number;
+};
+
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const encryptionUtils = new EncryptionUtils();
@@ -18,16 +31,193 @@ const DashboardPage: React.FC = () => {
   // Modal state
   const [showEncryptModal, setShowEncryptModal] = useState(false);
 
-  // File encryption states???
+  // File encryption states
   const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState("");
   const [fileType, setFileType] = useState("");
 
-  // Temporary mock items to display****************************
-  const tempItems = ["FileOne.txt", "Photo123.jpg", "SecretDoc.pdf", "Archive.zip"];
+  // File listing states
+  const [userFiles, setUserFiles] = useState<UserObjectType[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Track which single item is "selected"????
+  // Selected item state
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+
+  // Preview states
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  // Cache expiration in minutes
+  const CACHE_EXPIRATION = 5;
+
+  // Fetch user files from the backend API
+  const fetchUserFiles = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    const idToken = localStorage.getItem("idToken");
+    if (!idToken) {
+      setError("Not authenticated");
+      setIsLoading(false);
+      navigate("/login");
+      return;
+    }
+    
+    try {
+      const response = await fetch("http://localhost:8080/listObjects", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${idToken}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Process the response - assuming it returns an array of objects
+      const files = data.map((file: any) => ({
+        Key: file.Key,
+        Size: file.Size
+      }));
+      
+      // Store in state
+      setUserFiles(files);
+      
+      // Cache the result with timestamp
+      const cacheData = {
+        files: files,
+        timestamp: new Date().getTime()
+      };
+      sessionStorage.setItem("userFilesCache", JSON.stringify(cacheData));
+      
+    } catch (err) {
+      console.error("Failed to fetch files:", err);
+      setError("Failed to load your files");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Check cache and fetch files on component mount
+  useEffect(() => {
+    const cachedData = sessionStorage.getItem("userFilesCache");
+    
+    if (cachedData) {
+      try {
+        const { files, timestamp } = JSON.parse(cachedData);
+        const now = new Date().getTime();
+        const cacheAge = (now - timestamp) / (1000 * 60); // Convert to minutes
+        
+        // If cache is still valid, use it
+        if (cacheAge < CACHE_EXPIRATION) {
+          console.log("Using cached file list");
+          setUserFiles(files);
+          setIsLoading(false);
+          return;
+        } else {
+          console.log("Cache expired, fetching fresh data");
+        }
+      } catch (err) {
+        console.error("Error parsing cached data:", err);
+      }
+    }
+    
+    // If no cache or expired cache, fetch fresh data
+    fetchUserFiles();
+  }, []);
+
+  // Function to handle previewing the selected file
+  const handlePreview = async () => {
+    if (!selectedItem) return;
+    
+    setIsPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewUrl(null);
+    
+    const idToken = localStorage.getItem("idToken");
+    if (!idToken) {
+      setPreviewError("Not logged in. Please log in to view files.");
+      setIsPreviewLoading(false);
+      return;
+    }
+    
+    try {
+      // Fetch the encrypted package
+      const response = await fetch("http://localhost:8080/downloadPackage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ fileName: selectedItem }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+      
+      // Parse the response
+      const encryptedPackage = await response.json();
+      
+      // Validate the package
+      if (!encryptedPackage.iv || !encryptedPackage.salt || !encryptedPackage.encryptedData) {
+        throw new Error("Incomplete encrypted package received");
+      }
+      
+      // Convert Base64 strings to ArrayBuffers
+      const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
+      const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
+      const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
+      
+      // Decrypt the data
+      const password = "myTestPassword123";
+      const decryptedBuffer = await encryptionUtils.decryptData(
+        encryptedData,
+        password,
+        salt,
+        iv
+      );
+      
+      // Create a Blob and URL
+      const blob = new Blob([decryptedBuffer], { type: encryptedPackage.fileType });
+      const url = URL.createObjectURL(blob);
+      
+      // Set the preview URL
+      setPreviewUrl(url);
+    } catch (error) {
+      console.error("Preview error:", error);
+      setPreviewError("Failed to preview file: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
+  // Use this effect to automatically preview when an item is selected
+  useEffect(() => {
+    if (selectedItem) {
+      handlePreview();
+    } else {
+      // Clean up preview when no item is selected
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+    }
+  }, [selectedItem]);
+
+  // Make sure to clean up URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   // -----------------------------
   // Logout
@@ -44,7 +234,7 @@ const DashboardPage: React.FC = () => {
   // Modal toggling
   // -----------------------------
   const openEncryptModal = () => {
-    // Reset prior file data???IDK if this is how we are calling everything to the back end
+    // Reset prior file data
     setFileData(null);
     setFileName("");
     setFileType("");
@@ -56,7 +246,7 @@ const DashboardPage: React.FC = () => {
   };
 
   // -----------------------------
-  // Handle file selection - - - - IDK - IS THIS HOW THIS WORKS? WILL NEED TO WORK ON
+  // Handle file selection
   // -----------------------------
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -122,6 +312,9 @@ const DashboardPage: React.FC = () => {
 
       console.log("Upload successful:", await response.json());
       closeEncryptModal();
+      
+      // Refresh file list after successful upload
+      fetchUserFiles();
     } catch (error) {
       console.error("Encryption/Upload error:", error);
     }
@@ -130,8 +323,9 @@ const DashboardPage: React.FC = () => {
   // -----------------------------
   // Handle clicking a file
   // -----------------------------
-  const handleItemClick = (itemName: string) => {
-    setSelectedItem(itemName);
+  const handleItemClick = (itemKey: string) => {
+    setSelectedItem(itemKey);
+    console.log(`Selected file: ${itemKey}`);
   };
 
   // -----------------------------
@@ -142,19 +336,103 @@ const DashboardPage: React.FC = () => {
   };
 
   // -----------------------------
-  // Download selected file
+  // Download and decrypt selected file
   // -----------------------------
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!selectedItem) {
       alert("Please select a file to download.");
       return;
     }
 
-    alert(`Downloading ${selectedItem} ...`);
-    console.log(`User wants to download: ${selectedItem}`);
-    // 1) fetch the encrypted bytes from R2
-    // 2) decrypt them with encryptionUtils.decryptData(...)
-    // 3) create a Blob and trigger a download
+    console.log(`Downloading ${selectedItem}...`);
+    
+    // If we already have a preview, use that instead of re-fetching
+    if (previewUrl) {
+      const a = document.createElement("a");
+      a.href = previewUrl;
+      a.download = selectedItem.split("/").pop() || "downloaded-file";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      console.log("Download complete using existing preview!");
+      return;
+    }
+    
+    // Otherwise proceed with normal download
+    const idToken = localStorage.getItem("idToken");
+    if (!idToken) {
+      console.error("No ID token found. User not logged in.");
+      alert("You must be logged in to download files.");
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setIsPreviewLoading(true);
+      // Step 1: Fetch the encrypted file from backend
+      const response = await fetch("http://localhost:8080/downloadPackage", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ fileName: selectedItem }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Download failed:", errorText);
+        alert("Failed to download the file. Please try again.");
+        return;
+      }
+
+      // Step 2: Parse the response
+      const encryptedPackage = await response.json();
+      console.log("Received encrypted package:", encryptedPackage);
+
+      // Validate the package
+      if (!encryptedPackage.iv || !encryptedPackage.salt || !encryptedPackage.encryptedData) {
+        console.error("Incomplete encrypted package received");
+        alert("The file data is corrupted or incomplete.");
+        return;
+      }
+
+      // Step 3: Convert Base64 strings to ArrayBuffers
+      const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
+      const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
+      const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
+      
+      // Step 4: Decrypt the data
+      const password = "myTestPassword123";
+      const decryptedBuffer = await encryptionUtils.decryptData(
+        encryptedData,
+        password,
+        salt,
+        iv
+      );
+
+      // Step 5: Create a Blob and trigger download
+      const blob = new Blob([decryptedBuffer], { type: encryptedPackage.fileType });
+      const url = URL.createObjectURL(blob);
+      
+      // Create a link and trigger the download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = encryptedPackage.fileName.split("/").pop() || "downloaded-file";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      // Cleanup
+      URL.revokeObjectURL(url);
+      
+      console.log("Download and decryption complete!");
+    } catch (error) {
+      console.error("Download/Decryption error:", error);
+      alert("An error occurred during download or decryption");
+    } finally {
+      setIsPreviewLoading(false);
+    }
   };
 
   return (
@@ -178,28 +456,45 @@ const DashboardPage: React.FC = () => {
           {/* LEFT BOX: List of files */}
           <div className="bg-white p-6 rounded-lg shadow-md w-80">
             <h2 className="text-xl font-semibold mb-4">Your Files</h2>
-            <ul className="space-y-2">
-              {tempItems.map((item) => (
-                <li key={item}>
-                  {/* 
-                    Instead of a checkbox, let's just make it clickable. 
-                    If you'd like checkboxes, you can adapt the approach, 
-                    but we want to "open" a preview box on click.
-                  */}
-                  <button
-                    onClick={() => handleItemClick(item)}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {item}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            
+            {isLoading ? (
+              <p className="text-gray-600">Loading files...</p>
+            ) : error ? (
+              <p className="text-red-500">{error}</p>
+            ) : userFiles.length === 0 ? (
+              <p className="text-gray-600">No files found</p>
+            ) : (
+              <ul className="space-y-2">
+                {userFiles.map((item) => (
+                  <li key={item.Key}>
+                    <button
+                      onClick={() => handleItemClick(item.Key)}
+                      className={`text-blue-600 hover:underline ${
+                        selectedItem === item.Key ? "font-bold" : ""
+                      }`}
+                    >
+                      {item.Key.split('/').pop() || item.Key}
+                    </button>
+                    <span className="text-xs text-gray-500 ml-2">
+                      {(item.Size / 1024).toFixed(1)} KB
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            
+            {/* Add a refresh button */}
+            <button 
+              onClick={fetchUserFiles}
+              className="mt-4 px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm hover:bg-gray-300"
+            >
+              Refresh
+            </button>
           </div>
 
           {/* RIGHT BOX: Only show if an item is selected */}
           {selectedItem && (
-            <div className="bg-white p-6 rounded-lg shadow-md w-80 relative">
+            <div className="bg-white p-6 rounded-lg shadow-md w-96 relative">
               {/* Close button */}
               <button
                 onClick={handleClosePreview}
@@ -209,24 +504,66 @@ const DashboardPage: React.FC = () => {
               </button>
 
               <h2 className="text-xl font-semibold mb-4">File Preview</h2>
-              <p className="text-gray-700">You selected: {selectedItem}</p>
+              <p className="text-gray-700 break-words mb-3">
+                Selected: {selectedItem.split('/').pop() || selectedItem}
+              </p>
+              
+              {/* Preview content */}
+              <div className="my-4 border rounded-lg p-2 min-h-[200px] flex items-center justify-center">
+                {isPreviewLoading ? (
+                  <p className="text-gray-500">Loading preview...</p>
+                ) : previewError ? (
+                  <p className="text-red-500 text-sm">{previewError}</p>
+                ) : previewUrl ? (
+                  selectedItem.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
+                    <img
+                      src={previewUrl}
+                      alt="File preview"
+                      className="max-w-full max-h-[300px] object-contain"
+                    />
+                  ) : selectedItem.toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
+                    <video controls className="max-w-full max-h-[300px]">
+                      <source src={previewUrl} />
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-2">Preview not available</p>
+                      <p className="text-xs text-gray-500">This file type cannot be previewed</p>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-gray-500">No preview available</p>
+                )}
+              </div>
+              
+              {/* Download button in the preview box */}
+              <button
+                onClick={handleDownload}
+                disabled={isPreviewLoading}
+                className={`mt-4 px-4 py-2 ${
+                  isPreviewLoading ? "bg-gray-400" : "bg-green-500 hover:bg-green-600"
+                } text-white rounded-lg transition w-full flex items-center justify-center`}
+              >
+                {isPreviewLoading ? (
+                  <>
+                    <span className="mr-2">Processing...</span>
+                  </>
+                ) : (
+                  "Download & Decrypt"
+                )}
+              </button>
             </div>
           )}
         </div>
 
-        {/* Buttons row: Encrypt & Download */}
-        <div className="flex space-x-4">
+        {/* Button for encryption */}
+        <div>
           <button
             onClick={openEncryptModal}
             className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
           >
             Encrypt & Upload
-          </button>
-          <button
-            onClick={handleDownload}
-            className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-          >
-            Download
           </button>
         </div>
       </div>

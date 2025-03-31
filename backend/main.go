@@ -2,6 +2,8 @@ package main
 
 import (
 	auth "backend/auth"
+	"backend/url"
+
 	// url "backend/url"
 	"context"
 	"encoding/json"
@@ -23,17 +25,17 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 
-	// s3Service, err := url.NewR2Service()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// // list objects with sub
-	// out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
-	// if err != nil {
-	// 	fmt.Println(err, "hi")
-	// }
-	// fmt.Println(out)
+	// list objects with sub
+	out, err := s3Service.ListObjects(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b")
+	if err != nil {
+		fmt.Println(err, "hi")
+	}
+	fmt.Println(out)
 
 	// out2, err2 := s3Service.GetObject(context.Background(), "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/unknown (53).png")
 	// if err2 != nil {
@@ -44,6 +46,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/downloadPackage", auth.DownloadPackage)
+	mux.HandleFunc("/listObjects", auth.ListUserObjects)
 
 	// Public routes
 	mux.HandleFunc("/login", loginHandler)
