@@ -109,33 +109,41 @@ const LoginPage: React.FC = () => {
           email,
         }),
       });
-      
+  
       if (!response.ok) {
-        const errorText = await response.text();
+        const errorText = await response.text(); // 🧠 fallback for plain string
         setErrorMessage(errorText || "Failed to confirm MFA code");
         return;
       }
-      
-      const data = await response.json();
-      
-      
-
-      console.log("MFA tokens:", data);
-
-      // Store tokens
+  
+      let data;
+      try {
+        data = await response.clone().json(); // ✅ allows fallback
+      } catch {
+        const fallback = await response.text();
+        throw new Error(`❌ Invalid JSON response: ${fallback}`);
+      }
+  
+      console.log("✅ MFA tokens:", data);
+  
       localStorage.setItem("idToken", data.IdToken);
       localStorage.setItem("accessToken", data.AccessToken);
       localStorage.setItem("refreshToken", data.RefreshToken);
       localStorage.setItem("email", email);
-
-      // Clear MFA popup and navigate
+  
       setShowMfaPopup(false);
       navigate("/dashboard");
     } catch (error) {
       console.error("MFA submission error:", error);
-      setErrorMessage("An error occurred during MFA submission");
+    
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("An unknown error occurred during MFA submission.");
+      }
     }
   };
+  
 
   // OPTIONAL: Resend code approach for MFA
   // Typically, for Cognito SMS_MFA, you can just re-initiate /login to get a new code

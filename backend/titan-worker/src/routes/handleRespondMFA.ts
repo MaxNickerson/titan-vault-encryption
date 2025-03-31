@@ -6,7 +6,10 @@ export async function handleRespondMFA(request: Request, env: Env): Promise<Resp
     const { session, mfaCode, email } = await request.json();
 
     if (!session || !mfaCode || !email) {
-      return withCors(new Response("Missing MFA input fields", { status: 400 }));
+      return withCors(new Response(JSON.stringify({ error: "Missing MFA input fields" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }));
     }
 
     const clientId = env.COGNITO_CLIENT_ID;
@@ -32,15 +35,22 @@ export async function handleRespondMFA(request: Request, env: Env): Promise<Resp
     const result = await res.json();
 
     if (!result.AuthenticationResult) {
-      return withCors(new Response("MFA failed, no tokens returned", { status: 401 }));
+      return withCors(new Response(JSON.stringify({ error: "MFA failed: no tokens returned" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }));
     }
 
     return withCors(new Response(JSON.stringify(result.AuthenticationResult), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     }));
+
   } catch (err) {
     console.error("RespondMFA error:", err);
-    return withCors(new Response("MFA handling error", { status: 500 }));
+    return withCors(new Response(JSON.stringify({ error: "MFA handling error" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    }));
   }
 }

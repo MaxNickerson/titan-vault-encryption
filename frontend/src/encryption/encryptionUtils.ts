@@ -1,5 +1,6 @@
 export class EncryptionUtils {
   private subtle = globalThis.crypto.subtle;
+  
 
 
   public async encryptData(
@@ -99,36 +100,47 @@ export class EncryptionUtils {
   }
 
   // Encrypt a masterKey and return { encryptedKey, salt, iv }
-  public async encryptMasterKey(
-    masterPassword: string
+  // Generate a random 256-bit key (32 bytes).
+  public generateRandomMasterKey(): Uint8Array {
+    const masterKey = new Uint8Array(32); // 256 bits
+    crypto.getRandomValues(masterKey);
+    return masterKey;
+  }
+
+  // Encrypt that 256-bit key with a wrapper key derived from the user’s password.
+  public async encryptMasterKeyWithWrapper(
+    plainMasterKey: Uint8Array,   // 32 bytes
+    userPassword: string
   ): Promise<{
     encryptedKey: ArrayBuffer;
     salt: Uint8Array;
     iv: Uint8Array;
   }> {
-    const salt = this.getSalt();
-    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-    const masterKeyRaw = this.getPasswordKey(masterPassword);
+    const salt = this.getSalt(); // your existing getSalt() is fine
+    const iv = crypto.getRandomValues(new Uint8Array(12));
 
-    const wrapperKey = await this.deriveKey(masterKeyRaw, salt);
+    // Derive the wrapper key from user’s typed password + salt
+    const passwordRaw = this.getPasswordKey(userPassword);
+    const wrapperKey = await this.deriveKey(passwordRaw, salt);
 
+    // Encrypt the 256-bit key
     const encryptedKey = await this.subtle.encrypt(
       { name: "AES-GCM", iv },
       wrapperKey,
-      masterKeyRaw
+      plainMasterKey // the random 32 bytes
     );
 
     return { encryptedKey, salt, iv };
   }
 
-  public async decryptMasterKey(
+  public async decryptMasterKeyWithWrapper(
     encryptedKey: ArrayBuffer,
-    masterPassword: string,
+    userPassword: string,
     salt: Uint8Array,
     iv: Uint8Array
-  ): Promise<ArrayBuffer> {
-    const masterKeyRaw = this.getPasswordKey(masterPassword);
-    const wrapperKey = await this.deriveKey(masterKeyRaw, salt);
+  ): Promise<Uint8Array> {
+    const passwordRaw = this.getPasswordKey(userPassword);
+    const wrapperKey = await this.deriveKey(passwordRaw, salt);
 
     const decrypted = await this.subtle.decrypt(
       { name: "AES-GCM", iv },
@@ -136,7 +148,8 @@ export class EncryptionUtils {
       encryptedKey
     );
 
-    return decrypted;
+    // Return 32-byte buffer
+    return new Uint8Array(decrypted);
   }
 
   public async hashString(input: string): Promise<string> {
@@ -149,19 +162,37 @@ export class EncryptionUtils {
   }
   
 
-  public async encryptFileWithIvPrepended(fileData: ArrayBuffer, password: string): Promise<Uint8Array> {
-    const { encryptedData, iv } = await this.encryptData(fileData, password);
-    const combined = new Uint8Array(iv.length + encryptedData.byteLength);
-    combined.set(iv, 0);
-    combined.set(new Uint8Array(encryptedData), iv.length);
+  public async encryptDataWithSaltAndIv(
+    fileData: ArrayBuffer,
+    password: string
+  ): Promise<Uint8Array> {
+    // 1) PBKDF2-based encryption
+    const { salt, iv, encryptedData } = await this.encryptData(fileData, password);
+    // encryptData() already calls getSalt() and deriveKey(...)
+  
+    // 2) Combine [salt(16 bytes) + iv(12 bytes) + ciphertext]
+    const combined = new Uint8Array(salt.length + iv.length + encryptedData.byteLength);
+    combined.set(salt, 0);
+    combined.set(iv, salt.length);
+    combined.set(new Uint8Array(encryptedData), salt.length + iv.length);
+  
     return combined;
   }
   
-  public async decryptFileWithIvPrepended(buffer: ArrayBuffer, password: string): Promise<ArrayBuffer> {
-    const iv = new Uint8Array(buffer.slice(0, 12));
-    const encryptedData = buffer.slice(12);
-    const dummySalt = new Uint8Array(16); // not used, but required by decryptData
-    return await this.decryptData(encryptedData, password, dummySalt, iv);
+  public async decryptDataWithSaltAndIv(
+    combined: ArrayBuffer,
+    password: string
+  ): Promise<ArrayBuffer> {
+    // 1) Parse out salt + iv
+    // First 16 bytes = salt
+    const salt = new Uint8Array(combined.slice(0, 16));
+    // Next 12 bytes = iv
+    const iv = new Uint8Array(combined.slice(16, 16 + 12));
+    // Remainder = ciphertext
+    const encryptedData = combined.slice(16 + 12);
+  
+    // 2) Decrypt
+    return this.decryptData(encryptedData, password, salt, iv);
   }
   
 

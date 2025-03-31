@@ -1,45 +1,50 @@
 import { verifyJwt } from "../utils/authentication";
 import { withCors } from "../utils/cors";
 
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-export async function handleUploadFile(request: Request, env: Env): Promise<Response> {
+export async function handleUploadFile(
+  request: Request,
+  env: Env
+): Promise<Response> {
   try {
-    console.log("📦 Upload route hit");
+    console.log("📦 [uploadFile] route hit");
 
-    const token = request.headers.get("Authorization")?.split(" ")[1];
-    if (!token) {
-      return withCors(new Response("Missing Authorization token", { status: 401 }));
+    // 1) Verify JWT
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return withCors(new Response("Missing or invalid token", { status: 401 }));
     }
-
+    const token = authHeader.replace("Bearer ", "");
     const claims = await verifyJwt(token, env);
     const sub = claims.sub;
 
-    const { hash, encryptedData } = await request.json();
-    console.log("📄 Body parsed:", { hash, encryptedData });
-    console.log("🧪 Writing to:", `${sub}/${hash}`);
+    // 2) Extract the `hash` from the x-file-name header
+    const hash = request.headers.get("X-file-name");
+    if (!hash) {
+      return withCors(new Response("Missing X-file-name header", { status: 400 }));
+    }
 
-    const binaryData = base64ToArrayBuffer(encryptedData);
+    // 3) Read the raw binary from the request
+    const fileBuffer = await request.arrayBuffer(); // The IV+encrypted file from the front end
 
-    await env.R2.put(`${sub}/${hash}`, binaryData, {
+    // 4) Write it to R2
+    const r2Key = `${sub}/${hash}`;
+    console.log("🧪 Storing to R2:", r2Key, "size =", fileBuffer.byteLength);
+
+    await env.R2.put(r2Key, fileBuffer, {
       httpMetadata: { contentType: "application/octet-stream" },
     });
 
-    console.log("✅ Stored:", `${sub}/${hash}`);
-    return withCors(new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }));
+    console.log("✅ Stored file in R2:", r2Key);
+    return withCors(
+      new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
   } catch (err) {
     console.error("🔥 Upload failed:", err);
-    return withCors(new Response("Upload failed: " + (err as Error).message, { status: 500 }));
+    return withCors(
+      new Response("Upload failed: " + (err as Error).message, { status: 500 })
+    );
   }
 }

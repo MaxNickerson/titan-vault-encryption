@@ -2,14 +2,13 @@ import { handleUploadFile } from "./routes/uploadFile";
 import { handleUploadManifest } from "./routes/uploadManifest";
 import { handleGetManifest } from "./routes/getManifest";
 import { handleGetFile } from "./routes/getFile";
-import { handleStoreMasterKey } from "./routes/storeMasterKey";
-import { handleRetrieveMasterKey } from "./routes/getMasterKey";
+import { handleStoreMasterPassword } from "./routes/storeMasterPassword";
+import { handleGetMasterPassword } from "./routes/getMasterPassword";
 import { withCors } from "./utils/cors";
 import { verifyJwt } from "./utils/authentication";
 import { handleLogin } from "./routes/handleLogin";
 import { handleRespondMFA } from "./routes/handleRespondMFA";
 import { handleListFiles } from "./routes/listFiles";
-import { handleSetMasterPasswordFlag } from "./routes/setMasterPasswordFlag";
 
 
 export interface Env {
@@ -28,9 +27,9 @@ export default {
       return new Response(null, {
         status: 204,
         headers: {
-          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Origin": "https://titan-vault-frontend.pages.dev",
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, X-File-Name, x-file-name",
         },
       });
     }
@@ -43,11 +42,6 @@ export default {
     if (method === "POST" && url.pathname === "/api/respondMFA") {
       return withCors(await handleRespondMFA(request, env));
     }
-
-    if (method === "POST" && url.pathname === "/api/set-masterpassword-flag") {
-      return withCors(await handleSetMasterPasswordFlag(request, env));
-    }
-    
 
     // ✅ Upload / Download / Manifest
     if (method === "POST" && url.pathname === "/api/upload-file") {
@@ -66,13 +60,12 @@ export default {
       return withCors(await handleGetFile(request, env));
     }
 
-    // ✅ Master Key Storage
-    if (method === "POST" && url.pathname === "/api/store-masterkey") {
-      return withCors(await handleStoreMasterKey(request, env));
+    if (method === "POST" && url.pathname === "/api/store-masterpassword") {
+      return withCors(await handleStoreMasterPassword(request, env));
     }
 
     if (method === "GET" && url.pathname === "/api/get-masterpassword") {
-      return withCors(await handleRetrieveMasterKey(request, env));
+      return withCors(await handleGetMasterPassword(request, env));
     }
 
     // ✅ List R2 contents (optional admin/debug)
