@@ -1,10 +1,9 @@
 import { verifyJwt } from "../utils/authentication";
-import { withCors } from "../utils/cors";
 
 export async function handleStoreMasterKey(request: Request, env: Env): Promise<Response> {
   const auth = request.headers.get("Authorization");
   if (!auth || !auth.startsWith("Bearer ")) {
-    return withCors(new Response("Missing or invalid token", { status: 401 }));
+    return new Response("Missing or invalid token", { status: 401 });
   }
 
   const token = auth.replace("Bearer ", "");
@@ -14,24 +13,24 @@ export async function handleStoreMasterKey(request: Request, env: Env): Promise<
     const claims = await verifyJwt(token, env);
     sub = claims.sub;
   } catch {
-    return withCors(new Response("Invalid JWT", { status: 401 }));
+    return new Response("Invalid JWT", { status: 401 });
   }
 
   if (!sub) {
-    return withCors(new Response("Missing sub in token", { status: 400 }));
+    return new Response("Missing sub in token", { status: 400 });
   }
 
   let body;
   try {
     body = await request.json();
   } catch {
-    return withCors(new Response("Invalid JSON", { status: 400 }));
+    return new Response("Invalid JSON", { status: 400 });
   }
 
   const { encryptedMasterKey, salt } = body;
 
   if (!encryptedMasterKey || !salt) {
-    return withCors(new Response("Missing encryptedMasterKey or salt", { status: 400 }));
+    return new Response("Missing encryptedMasterKey or salt", { status: 400 });
   }
 
   try {
@@ -39,10 +38,10 @@ export async function handleStoreMasterKey(request: Request, env: Env): Promise<
     await env.R2.put(`${sub}/salt.bin`, salt);
   } catch (err) {
     console.error("Failed to write to R2:", err);
-    return withCors(new Response("Failed to store master key", { status: 500 }));
+    return new Response("Failed to store master key", { status: 500 });
   }
 
-  return withCors(new Response(
+  return new Response(
     JSON.stringify({
       message: "Master password stored successfully.",
       sub,
@@ -51,5 +50,5 @@ export async function handleStoreMasterKey(request: Request, env: Env): Promise<
       status: 200,
       headers: { "Content-Type": "application/json" },
     }
-  ));
+  );
 }

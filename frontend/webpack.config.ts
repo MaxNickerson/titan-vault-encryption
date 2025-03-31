@@ -1,19 +1,15 @@
 import path from 'path';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
-import webpack from 'webpack';
-import dotenv from 'dotenv';
+import type { Configuration } from 'webpack';
 
-// Load env variables from .env file
-dotenv.config();
-
-const config: webpack.Configuration = {
+const config: Configuration = {
   entry: './src/index.tsx',
   output: {
     path: path.resolve(__dirname, 'dist'),
     filename: 'bundle.js',
     publicPath: '/',
   },
-  mode: 'production', // change to "development" if testing locally
+  mode: 'development',
   module: {
     rules: [
       {
@@ -34,10 +30,14 @@ const config: webpack.Configuration = {
     new HtmlWebpackPlugin({
       template: './public/index.html',
     }),
-    new webpack.DefinePlugin({
-      'process.env.REACT_APP_API_BASE': JSON.stringify(process.env.REACT_APP_API_BASE),
-    }),
   ],
+  devServer: {
+    historyApiFallback: true,
+    static: {
+      directory: path.join(__dirname, 'public'),
+    },
+    port: 3000,
+  },
 };
 
 export default config;

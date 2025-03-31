@@ -4,12 +4,6 @@ import { handleGetManifest } from "./routes/getManifest";
 import { handleGetFile } from "./routes/getFile";
 import { handleStoreMasterKey } from "./routes/storeMasterKey";
 import { handleRetrieveMasterKey } from "./routes/getMasterKey";
-import { withCors } from "./utils/cors"; // ✅ Import your CORS wrapper
-import { verifyJwt } from "./utils/authentication";
-import { handleLogin } from "./routes/handleLogin";
-import { handleRespondMFA } from "./routes/handleRespondMFA";
-import { handleListFiles } from "./routes/listFiles";
-
 
 export interface Env {
   R2: R2Bucket;
@@ -22,66 +16,89 @@ export default {
     const url = new URL(request.url);
     const method = request.method;
 
-    // ✅ Global CORS preflight handler
-    if (method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        },
-      });
-    }
-
-    // ✅ Wrap each response with withCors()
-
-    if (method === "POST" && url.pathname === "/api/login") {
-      const res = await handleLogin(request, env); 
-      return withCors(res);
-    }
-    
-    if (method === "POST" && url.pathname === "/api/respondMFA") {
-      const res = await handleRespondMFA(request, env); 
-      return withCors(res);
-    }
-    
-
     if (method === "POST" && url.pathname === "/upload-file") {
-      const res = await handleUploadFile(request, env);
-      return withCors(res);
+      return handleUploadFile(request, env);
     }
 
     if (method === "POST" && url.pathname === "/upload-manifest") {
-      const res = await handleUploadManifest(request, env);
-      return withCors(res);
+      return handleUploadManifest(request, env);
     }
-
     if (method === "POST" && url.pathname === "/api/store-masterkey") {
-      const res = await handleStoreMasterKey(request, env);
-      return withCors(res);
+      return handleStoreMasterKey(request, env);
     }
-
+    
     if (method === "GET" && url.pathname === "/api/retrieve-masterkey") {
-      const res = await handleRetrieveMasterKey(request, env);
-      return withCors(res);
+      return handleRetrieveMasterKey(request, env);
     }
 
     if (method === "GET" && url.pathname === "/manifest") {
-      const res = await handleGetManifest(request, env);
-      return withCors(res);
-    }
-
-    if (method === "GET" && url.pathname === "/file") {
-      const res = await handleGetFile(request, env);
-      return withCors(res);
-    }    
-
-    if (method === "GET" && url.pathname === "/api/list") {
-      const res = await handleListFiles(request, env);
-      return withCors(res);
+      return handleGetManifest(request, env);
     }
     
-    return withCors(new Response("Not Found", { status: 404 }));
+
+	if (method === "GET" && url.pathname.startsWith("/file/")) {
+		const hash = url.pathname.split("/file/")[1];
+		return handleGetFile(request, env, hash);
+	}
+	  
+	if (url.pathname === "/list" && method === "GET") {
+		const objects = await env.R2.list({ prefix: "test-user-123/" });
+		console.log("🧾 R2 contents:", objects.objects);
+		return new Response(JSON.stringify(objects.objects, null, 2), {
+		  headers: { "Content-Type": "application/json" },
+		});
+	  }
+
+    if (method === "POST" && url.pathname === "/api/store-masterkey") {
+      const auth = request.headers.get("Authorization");
+      if (!auth || !auth.startsWith("Bearer ")) {
+        return new Response("Missing or invalid token", { status: 401 });
+      }
+    
+      const token = auth.replace("Bearer ", "");
+    
+      let sub: string;
+      try {
+        const parts = token.split(".");
+        const payload = JSON.parse(atob(parts[1]));
+        sub = payload.sub;
+      } catch {
+        return new Response("Invalid JWT", { status: 401 });
+      }
+    
+      if (!sub) {
+        return new Response("Missing sub in token", { status: 400 });
+      }
+    
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return new Response("Invalid JSON", { status: 400 });
+      }
+    
+      const { encryptedMasterKey, salt } = body;
+    
+      if (!encryptedMasterKey || !salt) {
+        return new Response("Missing encryptedMasterKey or salt", { status: 400 });
+      }
+    
+      await env.R2.put(`${sub}/masterkey.enc`, encryptedMasterKey);
+      await env.R2.put(`${sub}/salt.bin`, salt);
+    
+      return new Response(
+        JSON.stringify({
+          message: "Master password stored successfully.",
+          sub,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
+    
+	  
+    return new Response("Not Found", { status: 404 });
   },
 };

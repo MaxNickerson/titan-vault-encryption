@@ -27,99 +27,83 @@ const LoginPage: React.FC = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-  
+
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_BASE}/login`, {
+      const response = await fetch("http://localhost:8080/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-  
+
       if (!response.ok) {
-        let errorText = await response.text();
-  
-        try {
-          const json = JSON.parse(errorText);
-          if (json?.error) {
-            errorText = json.error;
-            console.error("⚠️ Login API returned error JSON:", json);
-          }
-        } catch {
-          console.warn("⚠️ Login API returned plain text error:", errorText);
-        }
-  
+        const errorText = await response.text();
+        // Check if the error indicates that the user is not confirmed.
         if (errorText.includes("UserNotConfirmedException")) {
+          // Optionally, save the email in localStorage so ConfirmationPage can access it.
           localStorage.setItem("email", email);
+          // Redirect to the confirmation page with the email passed in location state.
           navigate("/confirm", { state: { email } });
         } else {
           setErrorMessage(errorText || "Login failed");
         }
         return;
       }
-  
+
+      // If the login is successful, parse the response.
       const data = await response.json();
-  
-      if (data.error) {
-        console.error("❌ Login error received:", data.error);
-        setErrorMessage(data.error);
-        return;
-      }
-  
-      console.log("✅ Login response:", data);
-  
+      console.log("Login response:", data);
+
+      // ----------------------------
+      // NEW: Check for MFA challenge
+      // ----------------------------
       if (data.ChallengeName && data.Session) {
+        // This means Cognito wants an MFA code
         setMfaSession(data.Session);
         setShowMfaPopup(true);
+        // Do not store tokens yet; we don't have them
         return;
       }
-  
+
+      // Otherwise, Cognito gave us tokens directly
       if (data.IdToken && data.AccessToken && data.RefreshToken) {
         localStorage.setItem("idToken", data.IdToken);
         localStorage.setItem("accessToken", data.AccessToken);
         localStorage.setItem("refreshToken", data.RefreshToken);
         localStorage.setItem("email", email);
-  
+
         navigate("/dashboard");
       } else {
+        // If no tokens, show error (unlikely unless there's a custom scenario)
         setErrorMessage("Login response invalid");
-        console.warn("⚠️ Unexpected login response structure:", data);
       }
     } catch (error) {
-      console.error("🔥 Login network or parsing error:", error);
+      console.error(error);
       setErrorMessage("An error occurred during login");
     }
   };
-  
 
   // -------------------------------------------------
   // NEW: Handler to respond to the MFA challenge
   // -------------------------------------------------
   const handleMfaSubmit = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_BASE}/respondMFA`, {
+      const response = await fetch("http://localhost:8080/respondMFA", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session: mfaSession,
           mfaCode,
-          email,
+          email, // "USERNAME" in ChallengeResponses
         }),
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         setErrorMessage(errorText || "Failed to confirm MFA code");
         return;
       }
-      
-      const data = await response.json();
-      
-      
 
+      const data = await response.json();
       console.log("MFA tokens:", data);
 
       // Store tokens
@@ -146,26 +130,21 @@ const LoginPage: React.FC = () => {
     setMfaCode("");
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_BASE}/login`, {
+      const response = await fetch("http://localhost:8080/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      
+
       if (!response.ok) {
-        const errorText = await response.text(); // ✅
+        const errorText = await response.text();
         setErrorMessage(errorText || "Failed to resend MFA code");
         return;
       }
-      
-      const data = await response.json(); // ✅ safe
-    
+      const data = await response.json();
       if (data.Session) {
         setMfaSession(data.Session);
       }
-      
       // Otherwise, hopefully triggers a new SMS code.
     } catch (err) {
       setErrorMessage("Error trying to resend MFA code.");
