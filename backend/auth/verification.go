@@ -14,11 +14,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	cognitoJwtVerify "github.com/jhosan7/cognito-jwt-verify"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	cognito "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
-	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 )
 
 type EncryptedPackage struct {
@@ -224,54 +219,4 @@ func DownloadPackage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(encPkg)
-}
-
-func SetMasterPassword(w http.ResponseWriter, r *http.Request) {
-	// 1) Verify the JWT from the Authorization header
-	authHeader := r.Header.Get("Authorization")
-	payload := verifyJWT(w, authHeader)
-	if payload == nil {
-		// verifyJWT already wrote an error response
-		return
-	}
-
-	// 2) Extract user "sub" from token claims
-	sub, err := payload.GetSubject()
-	if err != nil {
-		http.Error(w, "No sub in token", http.StatusUnauthorized)
-		return
-	}
-
-	// 3) Load AWS config
-	cfg, err := config.LoadDefaultConfig(context.TODO())
-	if err != nil {
-		http.Error(w, "Failed to load AWS config", http.StatusInternalServerError)
-		return
-	}
-
-	// 4) Create Cognito client
-	client := cognito.NewFromConfig(cfg)
-	userPoolId := os.Getenv("COGNITO_USER_POOL_ID")
-
-	// 5) AdminUpdateUserAttributes to set custom:hasMasterPassword = true
-	_, err = client.AdminUpdateUserAttributes(context.TODO(), &cognito.AdminUpdateUserAttributesInput{
-		UserPoolId: aws.String(userPoolId),
-		Username:   aws.String(sub),
-		UserAttributes: []types.AttributeType{
-			{
-				Name:  aws.String("custom:hasMasterPassword"),
-				Value: aws.String("true"),
-			},
-		},
-	})
-
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to update user attribute: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "Master password attribute updated to true",
-	})
 }

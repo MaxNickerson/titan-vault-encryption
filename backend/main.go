@@ -55,7 +55,6 @@ func main() {
 	// Protected routes
 	mux.HandleFunc("/verify", auth.TokenVerify)
 	mux.HandleFunc("/upload", auth.VerifyAndUpload)
-	mux.HandleFunc("/set-master-password", auth.SetMasterPassword)
 
 	fmt.Println("Server is running on port 8080")
 	log.Fatal(http.ListenAndServe(":8080", enableCors(mux)))

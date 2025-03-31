@@ -97,48 +97,7 @@ export class EncryptionUtils {
             ["encrypt","decrypt"]
         );
     }
-
-    // Encrypt a masterKey and return { encryptedKey, salt, iv }
-public async encryptMasterKey(
-    masterPassword: string
-  ): Promise<{
-    encryptedKey: ArrayBuffer;
-    salt: Uint8Array;
-    iv: Uint8Array;
-  }> {
-    const salt = this.getSalt();
-    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
-    const masterKeyRaw = this.getPasswordKey(masterPassword);
-  
-    const wrapperKey = await this.deriveKey(masterKeyRaw, salt);
-  
-    const encryptedKey = await this.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      wrapperKey,
-      masterKeyRaw
-    );
-  
-    return { encryptedKey, salt, iv };
-  }
-  
-  public async decryptMasterKey(
-    encryptedKey: ArrayBuffer,
-    masterPassword: string,
-    salt: Uint8Array,
-    iv: Uint8Array
-  ): Promise<ArrayBuffer> {
-    const masterKeyRaw = this.getPasswordKey(masterPassword);
-    const wrapperKey = await this.deriveKey(masterKeyRaw, salt);
-  
-    const decrypted = await this.subtle.decrypt(
-      { name: "AES-GCM", iv },
-      wrapperKey,
-      encryptedKey
-    );
-  
-    return decrypted;
-  }
-  
+    
 
 
 }
