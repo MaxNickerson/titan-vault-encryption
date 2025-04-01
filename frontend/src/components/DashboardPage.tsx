@@ -57,6 +57,11 @@ const DashboardPage: React.FC = () => {
   const [fileList, setFileList] = useState<ManifestEntry[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
 
+  // -- NEW: Preview states --
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState<boolean>(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
   // ======================================
   // 1) Load Manifest (Decryption)
   // ======================================
@@ -261,13 +266,21 @@ const DashboardPage: React.FC = () => {
   // ======================================
   // 5) Handle File Selection
   // ======================================
+  const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15 MB
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files.length > 0) {
       const file = files[0];
+  
+      if (file.size > MAX_FILE_SIZE) {
+        alert("File is too large. Max file size is 15MB.");
+        return;
+      }
+  
       setFileName(file.name);
       setFileType(file.type);
-
+  
       const reader = new FileReader();
       reader.onload = (e) => {
         if (e.target?.result) {
@@ -277,7 +290,6 @@ const DashboardPage: React.FC = () => {
       reader.readAsArrayBuffer(file);
     }
   };
-
   // ======================================
   // 6) Encrypt & Upload File (PBKDF2 w/ salt + IV)
   // ======================================
@@ -409,6 +421,77 @@ const DashboardPage: React.FC = () => {
   const handleItemClick = (itemName: string) => setSelectedItem(itemName);
   const handleClosePreview = () => setSelectedItem(null);
 
+  // -- NEW: useEffect to load and decrypt selected file for preview --
+  useEffect(() => {
+    // Reset state if no file is selected
+    if (!selectedItem) {
+      setPreviewUrl(null);
+      setPreviewError(null);
+      setIsPreviewLoading(false);
+      return;
+    }
+
+    // Check extension to see if we can preview (image or video)
+    const isImage = !!selectedItem.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/);
+    const isVideo = !!selectedItem.toLowerCase().match(/\.(mp4|webm|ogg)$/);
+
+    if (!isImage && !isVideo) {
+      // Not a supported preview type => skip
+      setPreviewUrl(null);
+      setPreviewError(null);
+      return;
+    }
+
+    (async () => {
+      try {
+        setIsPreviewLoading(true);
+        setPreviewError(null);
+        setPreviewUrl(null);
+
+        const idToken = localStorage.getItem("idToken");
+        const base64Password = localStorage.getItem("masterPassword");
+        if (!idToken || !base64Password) throw new Error("Not unlocked or missing credentials.");
+
+        // Find manifest entry
+        const entry = fileList.find((f) => f.fileName === selectedItem);
+        if (!entry) throw new Error("File not found in manifest.");
+        const { hash, fileType } = entry;
+
+        // 1) Fetch the encrypted file
+        const resp = await fetch(`https://api.titanvaultencrypt.com/api/file?hash=${hash}`, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+        if (!resp.ok) throw new Error("Failed to load file for preview.");
+
+        const encryptedBlob = await resp.blob();
+        const encryptedBuffer = await encryptedBlob.arrayBuffer();
+
+        // 2) Decrypt
+        const password = atob(base64Password);
+        const decrypted = await encryptionUtils.decryptDataWithSaltAndIv(encryptedBuffer, password);
+
+        // 3) Create an object URL
+        const previewBlob = new Blob([decrypted], { type: fileType || "application/octet-stream" });
+        const url = URL.createObjectURL(previewBlob);
+
+        setPreviewUrl(url);
+      } catch (err: any) {
+        setPreviewError(err.message || "Preview failed.");
+      } finally {
+        setIsPreviewLoading(false);
+      }
+    })();
+  }, [selectedItem]);
+
+  // Cleanup old object URLs
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   // ======================================
   // 9) Logout
   // ======================================
@@ -451,9 +534,7 @@ const DashboardPage: React.FC = () => {
             <ul className="space-y-2">
               {fileList.map((item) => (
                 <li key={item.hash}>
-                  <button onClick={() => handleItemClick(item.fileName)}>
-                    {item.fileName}
-                  </button>
+                  <button onClick={() => handleItemClick(item.fileName)}>{item.fileName}</button>
                 </li>
               ))}
             </ul>
@@ -469,7 +550,34 @@ const DashboardPage: React.FC = () => {
                 X
               </button>
               <h2 className="text-xl font-semibold mb-4">File Preview</h2>
-              <p className="text-gray-700">You selected: {selectedItem}</p>
+
+              <div className="my-4 border rounded-lg p-2 min-h-[200px] flex items-center justify-center">
+                {isPreviewLoading ? (
+                  <p className="text-gray-500">Loading preview...</p>
+                ) : previewError ? (
+                  <p className="text-red-500 text-sm">{previewError}</p>
+                ) : previewUrl ? (
+                  selectedItem.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
+                    <img
+                      src={previewUrl}
+                      alt="File preview"
+                      className="max-w-full max-h-[300px] object-contain"
+                    />
+                  ) : selectedItem.toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
+                    <video controls className="max-w-full max-h-[300px]">
+                      <source src={previewUrl} />
+                      Your browser does not support the video tag.
+                    </video>
+                  ) : (
+                    <div className="text-center">
+                      <p className="text-gray-600 mb-2">Preview not available</p>
+                      <p className="text-xs text-gray-500">This file type cannot be previewed</p>
+                    </div>
+                  )
+                ) : (
+                  <p className="text-gray-500">No preview available</p>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -500,6 +608,7 @@ const DashboardPage: React.FC = () => {
           <div className="bg-white p-6 rounded shadow-md w-96">
             <h2 className="text-xl font-bold mb-4">Encrypt & Upload</h2>
             <input type="file" onChange={handleFileUpload} className="mb-4" />
+            <p className="text-sm text-gray-500 mb-4">Maximum file size: 15MB</p>
             <div className="flex justify-end space-x-4">
               <button
                 onClick={handleEncryptAndUpload}

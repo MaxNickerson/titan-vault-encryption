@@ -23,9 +23,22 @@ export async function handleUploadFile(
       return withCors(new Response("Missing X-file-name header", { status: 400 }));
     }
 
+    // ✅ Define MAX_SIZE early
+    const MAX_SIZE = 15 * 1024 * 1024; // 15 MB
+
+    // ✅ PRE-3: Check Content-Length if present (optional but faster)
+    const contentLength = request.headers.get("Content-Length");
+    if (contentLength && parseInt(contentLength) > MAX_SIZE) {
+      return withCors(new Response("File too large", { status: 413 }));
+    }
+
     // 3) Read the raw binary from the request
     const fileBuffer = await request.arrayBuffer(); // The IV+encrypted file from the front end
 
+    // ✅ 3.5: Double check actual buffer size
+    if (fileBuffer.byteLength > MAX_SIZE) {
+      return withCors(new Response("File too large. Max allowed is 15MB.", { status: 413 }));
+    }
     // 4) Write it to R2
     const r2Key = `${sub}/${hash}`;
     console.log("🧪 Storing to R2:", r2Key, "size =", fileBuffer.byteLength);
