@@ -32,7 +32,7 @@ export default {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": "https://titan-vault-frontend.pages.dev",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization, X-File-Name, x-file-name",
         },
       });
