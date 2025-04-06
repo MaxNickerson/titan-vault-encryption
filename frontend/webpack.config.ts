@@ -36,6 +36,8 @@ const config: webpack.Configuration = {
     }),
     new webpack.DefinePlugin({
       'process.env.REACT_APP_API_BASE': JSON.stringify(process.env.REACT_APP_API_BASE),
+      'process.env.REACT_APP_COGNITO_USER_POOL_ID': JSON.stringify(process.env.REACT_APP_COGNITO_USER_POOL_ID || ''),
+      'process.env.REACT_APP_COGNITO_APP_CLIENT_ID': JSON.stringify(process.env.REACT_APP_COGNITO_APP_CLIENT_ID || ''),
     }),
   ],
 };

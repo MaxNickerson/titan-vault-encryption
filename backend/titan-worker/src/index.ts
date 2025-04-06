@@ -9,6 +9,10 @@ import { verifyJwt } from "./utils/authentication";
 import { handleLogin } from "./routes/handleLogin";
 import { handleRespondMFA } from "./routes/handleRespondMFA";
 import { handleListFiles } from "./routes/listFiles";
+import { handleDeleteUser } from "./routes/deleteUser";
+import { handleDeleteFile } from "./routes/deleteFile";
+
+
 
 
 export interface Env {
@@ -72,6 +76,15 @@ export default {
     if (method === "GET" && url.pathname === "/api/list") {
       return withCors(await handleListFiles(request, env));
     }
+
+    if (method === "DELETE" && url.pathname === "/api/delete-userdata") {
+      return withCors(await handleDeleteUser(request, env));
+    }
+
+    if (method === "DELETE" && url.pathname === "/api/delete-file") {
+      return withCors(await handleDeleteFile(request, env));
+    }
+    
 
     // ✅ Fallback route
     return withCors(new Response(JSON.stringify({ error: "Not Found" }), {
