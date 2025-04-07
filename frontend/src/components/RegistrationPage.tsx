@@ -41,6 +41,13 @@ const RegistrationPage = () => {
       attributeList.push(new CognitoUserAttribute({ Name: "phone_number", Value: formattedPhoneNumber }));
     }
 
+
+      // Add the hasMasterPassword custom attribute with default value "false"
+    attributeList.push(new CognitoUserAttribute({ 
+      Name: "custom:hasMasterPassword", 
+      Value: "false" 
+    }));
+    
     UserPool.signUp(email, password, attributeList, [], (err, result) => {
       if (err) {
         setErrorMessage(err.message || JSON.stringify(err));

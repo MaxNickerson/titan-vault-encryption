@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { EncryptionUtils } from "../encryption/encryptionUtils";
+import { 
+  CognitoIdentityProviderClient, 
+  UpdateUserAttributesCommand 
+} from "@aws-sdk/client-cognito-identity-provider";
+import { 
+  AuthenticationDetails, 
+  CognitoUser, 
+  CognitoUserSession 
+} from "amazon-cognito-identity-js";
+import UserPool from "../cognitoConfig"; // Your Cognito configuration
 
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = "";
@@ -65,6 +75,64 @@ const DashboardPage: React.FC = () => {
     
   // Cache expiration in minutes
   const CACHE_EXPIRATION = 5;
+
+  // Function to refresh user tokens to get updated attributes
+  const refreshUserTokens = async () => {
+    const email = localStorage.getItem("email");
+    if (!email) return false;
+    
+    return new Promise<boolean>((resolve, reject) => {
+      const cognitoUser = new CognitoUser({
+        Username: email,
+        Pool: UserPool,
+      });
+      
+      cognitoUser.getSession((err: Error | null, session: CognitoUserSession | null) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // Store the refreshed tokens
+        if (session) {
+          localStorage.setItem("idToken", session.getIdToken().getJwtToken());
+          localStorage.setItem("accessToken", session.getAccessToken().getJwtToken());
+          localStorage.setItem("refreshToken", session.getRefreshToken().getToken());
+          resolve(true);
+        } else {
+          reject(new Error("Failed to get session"));
+        }
+      });
+    });
+  };
+
+  // Function to check if the master password test file exists
+  const checkMasterPasswordTestFile = async () => {
+    try {
+      const idToken = localStorage.getItem("idToken");
+      if (!idToken) return false;
+      
+      // Try to fetch the user's files
+      const response = await fetch("http://localhost:8080/listObjects", {
+        headers: {
+          Authorization: `Bearer ${idToken}`
+        }
+      });
+      
+      if (!response.ok) return false;
+      
+      const files = await response.json();
+      
+      // Check if any of the files is the master password test file
+      return files.some((file: any) => 
+        file.Key && typeof file.Key === 'string' && 
+        file.Key.endsWith('/master-password-test.txt')
+      );
+    } catch (error) {
+      console.error("Error checking for master password test file:", error);
+      return false;
+    }
+  };
 
   // Fetch user files from the backend API
   const fetchUserFiles = async () => {
@@ -145,7 +213,7 @@ const DashboardPage: React.FC = () => {
     fetchUserFiles();
   }, []);
 
-   // ======================================
+  // ======================================
   // [B] On mount => Check JWT & masterPassword
   // ======================================
   useEffect(() => {
@@ -153,99 +221,132 @@ const DashboardPage: React.FC = () => {
     if (!token) {
       return navigate("/login");
     }
-  
-    try {
-      const payload = JSON.parse(base64UrlDecode(token.split(".")[1]));
-      const hasMP = payload["custom:hasMasterPassword"] === "true";
-      const storedPass = localStorage.getItem("masterPassword");
-  
-      if (hasMP && storedPass) {
-        // move them along into dashboard page
-      } else if (hasMP) {
-        // force user to enter master password and grab that encrypted file from r2 bucket
-        setShowEnterModal(true);
-      } else {
-        // create master password
-        setShowCreateModal(true);
-      }
-    } catch (err) {
-      console.error("Token decode error:", err);
-      navigate("/login");
-    }
-  }, [navigate]);
 
-    // Function to create and store a new master password
-    const handleCreateMasterPassword = async () => {
-      // Reset error state
-      setPasswordError(null);
-      
-      // Validate passwords
-      if (masterPassword.length < 8) {
-        setPasswordError("Password must be at least 8 characters");
-        return;
-      }
-      
-      if (masterPassword !== confirmPassword) {
-        setPasswordError("Passwords don't match");
-        return;
-      }
-      
-      setIsPasswordProcessing(true);
-      
+    const checkAuth = async () => {
       try {
-        // 1. Create a test file encrypted with this password
-        const testData = new TextEncoder().encode("This is a test file to verify your master password.");
-        const testBuffer = testData.buffer;
-        
-        // 2. Encrypt it
-        const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
-          testBuffer as ArrayBuffer,
-          masterPassword
-        );
-        
-        // 3. Prepare package
-        const packageData = {
-          iv: arrayBufferToBase64(iv),
-          salt: arrayBufferToBase64(salt),
-          encryptedData: arrayBufferToBase64(encryptedData),
-          fileName: "master-password-test.txt",
-          fileType: "text/plain",
-          setMasterPassword: true // Flag for backend to know this is a master password setup
-        };
-        
-        // 4. Send to backend
-        const idToken = localStorage.getItem("idToken");
-        const response = await fetch("http://localhost:8080/setMasterPassword", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`
-          },
-          body: JSON.stringify(packageData)
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(errorText);
+        // First check if the test file exists - most reliable method
+        const hasMP = await checkMasterPasswordTestFile();
+        const storedPass = localStorage.getItem("masterPassword");
+
+        if (hasMP && storedPass) {
+          // User has master password and it's stored locally
+          console.log("Master password found in localStorage");
+        } else if (hasMP) {
+          // User has set master password but it's not in localStorage
+          console.log("Master password exists but not in localStorage, showing enter modal");
+          setShowEnterModal(true);
+        } else {
+          // No master password set yet
+          console.log("No master password set, showing create modal");
+          setShowCreateModal(true);
         }
-        
-        // 5. Store password in localStorage
-        localStorage.setItem("masterPassword", masterPassword);
-        
-        // 6. Close modal
-        setShowCreateModal(false);
-        
-        // 7. Refresh file list
-        fetchUserFiles();
-        
-      } catch (error) {
-        console.error("Error setting master password:", error);
-        setPasswordError("Failed to set master password: " + 
-          (error instanceof Error ? error.message : "Unknown error"));
-      } finally {
-        setIsPasswordProcessing(false);
+      } catch (err) {
+        console.error("Auth check error:", err);
+        navigate("/login");
       }
     };
+    
+    checkAuth();
+  }, [navigate]);
+
+  // Function to create and store a new master password
+  const handleCreateMasterPassword = async () => {
+    // Reset error state
+    setPasswordError(null);
+    
+    // Validate passwords
+    if (masterPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters");
+      return;
+    }
+    
+    if (masterPassword !== confirmPassword) {
+      setPasswordError("Passwords don't match");
+      return;
+    }
+    
+    setIsPasswordProcessing(true);
+    
+    try {
+      // 1. Create a test file encrypted with this password
+      const testData = new TextEncoder().encode("This is a test file to verify your master password.");
+      const testBuffer = testData.buffer;
+      
+      // 2. Encrypt it
+      const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
+        testBuffer,
+        masterPassword
+      );
+      
+      // 3. Prepare package
+      const packageData = {
+        iv: arrayBufferToBase64(iv),
+        salt: arrayBufferToBase64(salt),
+        encryptedData: arrayBufferToBase64(encryptedData),
+        fileName: "master-password-test.txt",
+        fileType: "text/plain"
+      };
+      
+      // 4. Send to backend to store the test file
+      const idToken = localStorage.getItem("idToken");
+      const accessToken = localStorage.getItem("accessToken"); // Need this for updating attributes
+      
+      if (!idToken || !accessToken) {
+        throw new Error("Not authenticated");
+      }
+      
+      // Upload the test file
+      const response = await fetch("http://localhost:8080/upload", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`
+        },
+        body: JSON.stringify(packageData)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText);
+      }
+      
+      // 5. Update the Cognito attribute directly from frontend
+      const client = new CognitoIdentityProviderClient({
+        region: "us-east-1" // Replace with your Cognito region
+      });
+      
+      const command = new UpdateUserAttributesCommand({
+        AccessToken: accessToken,
+        UserAttributes: [
+          {
+            Name: "custom:hasMasterPassword",
+            Value: "true"
+          }
+        ]
+      });
+      
+      await client.send(command);
+      
+      // 6. Store password in localStorage
+      localStorage.setItem("masterPassword", masterPassword);
+      
+      // 7. Refresh token to get updated attributes
+      await refreshUserTokens();
+      
+      // 8. Close modal
+      setShowCreateModal(false);
+      
+      // 9. Refresh file list
+      fetchUserFiles();
+      
+    } catch (error) {
+      console.error("Error setting master password:", error);
+      setPasswordError("Failed to set master password: " + 
+        (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsPasswordProcessing(false);
+    }
+  };
 
   // Function to verify an existing master password
   const handleVerifyMasterPassword = async () => {
@@ -266,20 +367,42 @@ const DashboardPage: React.FC = () => {
       });
       
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Incorrect master password");
+        if (response.status === 404) {
+          throw new Error("No master password set. Please create one.");
         } else {
           const errorText = await response.text();
           throw new Error(errorText);
         }
       }
       
-      // 2. If verified, store in localStorage
-      localStorage.setItem("masterPassword", masterPassword);
+      // 2. Get the encrypted package
+      const encryptedPackage = await response.json();
       
-      // 3. Close modal
-      setShowEnterModal(false);
-      
+      // 3. Verify by actually trying to decrypt it
+      try {
+        const iv = new Uint8Array(base64ToArrayBuffer(encryptedPackage.iv));
+        const salt = new Uint8Array(base64ToArrayBuffer(encryptedPackage.salt));
+        const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
+        
+        await encryptionUtils.decryptData(
+          encryptedData,
+          masterPassword,
+          salt,
+          iv
+        );
+        
+        // If we get here, decryption was successful
+        console.log("Master password verified successfully");
+        
+        // 4. If verified, store in localStorage
+        localStorage.setItem("masterPassword", masterPassword);
+        
+        // 5. Close modal
+        setShowEnterModal(false);
+      } catch (decryptError) {
+        console.error("Decryption failed:", decryptError);
+        throw new Error("Incorrect master password. Please try again.");
+      }
     } catch (error) {
       console.error("Password verification error:", error);
       setPasswordError("Verification failed: " + 
@@ -288,6 +411,7 @@ const DashboardPage: React.FC = () => {
       setIsPasswordProcessing(false);
     }
   };
+
   // Function to handle previewing the selected file
   const handlePreview = async () => {
     if (!selectedItem) return;
@@ -385,6 +509,7 @@ const DashboardPage: React.FC = () => {
     localStorage.removeItem("idToken");
     localStorage.removeItem("refreshToken");
     localStorage.removeItem("email");
+    localStorage.removeItem("masterPassword");
     navigate("/login");
   };
 
