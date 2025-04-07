@@ -18,6 +18,12 @@ function base64ToArrayBuffer(base64: string) {
   return bytes.buffer;
 }
 
+function base64UrlDecode(b64url: string): string {
+  const base64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+  return atob(padded);
+}
+
 // Define the type for objects returned from the backend
 type UserObjectType = {
   Key: string;
@@ -49,6 +55,14 @@ const DashboardPage: React.FC = () => {
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // for passwordcreation and cognito checking
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEnterModal, setShowEnterModal] = useState(false);
+  const [masterPassword, setMasterPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isPasswordProcessing, setIsPasswordProcessing] = useState(false);
+    
   // Cache expiration in minutes
   const CACHE_EXPIRATION = 5;
 
@@ -131,6 +145,149 @@ const DashboardPage: React.FC = () => {
     fetchUserFiles();
   }, []);
 
+   // ======================================
+  // [B] On mount => Check JWT & masterPassword
+  // ======================================
+  useEffect(() => {
+    const token = localStorage.getItem("idToken");
+    if (!token) {
+      return navigate("/login");
+    }
+  
+    try {
+      const payload = JSON.parse(base64UrlDecode(token.split(".")[1]));
+      const hasMP = payload["custom:hasMasterPassword"] === "true";
+      const storedPass = localStorage.getItem("masterPassword");
+  
+      if (hasMP && storedPass) {
+        // move them along into dashboard page
+      } else if (hasMP) {
+        // force user to enter master password and grab that encrypted file from r2 bucket
+        setShowEnterModal(true);
+      } else {
+        // create master password
+        setShowCreateModal(true);
+      }
+    } catch (err) {
+      console.error("Token decode error:", err);
+      navigate("/login");
+    }
+  }, [navigate]);
+
+    // Function to create and store a new master password
+    const handleCreateMasterPassword = async () => {
+      // Reset error state
+      setPasswordError(null);
+      
+      // Validate passwords
+      if (masterPassword.length < 8) {
+        setPasswordError("Password must be at least 8 characters");
+        return;
+      }
+      
+      if (masterPassword !== confirmPassword) {
+        setPasswordError("Passwords don't match");
+        return;
+      }
+      
+      setIsPasswordProcessing(true);
+      
+      try {
+        // 1. Create a test file encrypted with this password
+        const testData = new TextEncoder().encode("This is a test file to verify your master password.");
+        const testBuffer = testData.buffer;
+        
+        // 2. Encrypt it
+        const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
+          testBuffer as ArrayBuffer,
+          masterPassword
+        );
+        
+        // 3. Prepare package
+        const packageData = {
+          iv: arrayBufferToBase64(iv),
+          salt: arrayBufferToBase64(salt),
+          encryptedData: arrayBufferToBase64(encryptedData),
+          fileName: "master-password-test.txt",
+          fileType: "text/plain",
+          setMasterPassword: true // Flag for backend to know this is a master password setup
+        };
+        
+        // 4. Send to backend
+        const idToken = localStorage.getItem("idToken");
+        const response = await fetch("http://localhost:8080/setMasterPassword", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`
+          },
+          body: JSON.stringify(packageData)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText);
+        }
+        
+        // 5. Store password in localStorage
+        localStorage.setItem("masterPassword", masterPassword);
+        
+        // 6. Close modal
+        setShowCreateModal(false);
+        
+        // 7. Refresh file list
+        fetchUserFiles();
+        
+      } catch (error) {
+        console.error("Error setting master password:", error);
+        setPasswordError("Failed to set master password: " + 
+          (error instanceof Error ? error.message : "Unknown error"));
+      } finally {
+        setIsPasswordProcessing(false);
+      }
+    };
+
+  // Function to verify an existing master password
+  const handleVerifyMasterPassword = async () => {
+    setPasswordError(null);
+    setIsPasswordProcessing(true);
+    
+    try {
+      const idToken = localStorage.getItem("idToken");
+      
+      // 1. Send password to backend for verification
+      const response = await fetch("http://localhost:8080/verifyMasterPassword", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`
+        },
+        body: JSON.stringify({ masterPassword })
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Incorrect master password");
+        } else {
+          const errorText = await response.text();
+          throw new Error(errorText);
+        }
+      }
+      
+      // 2. If verified, store in localStorage
+      localStorage.setItem("masterPassword", masterPassword);
+      
+      // 3. Close modal
+      setShowEnterModal(false);
+      
+    } catch (error) {
+      console.error("Password verification error:", error);
+      setPasswordError("Verification failed: " + 
+        (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsPasswordProcessing(false);
+    }
+  };
   // Function to handle previewing the selected file
   const handlePreview = async () => {
     if (!selectedItem) return;
@@ -138,7 +295,9 @@ const DashboardPage: React.FC = () => {
     setIsPreviewLoading(true);
     setPreviewError(null);
     setPreviewUrl(null);
-    
+    // Get the master password from localStorage
+    const password = localStorage.getItem("masterPassword") || "myTestPassword123";
+
     const idToken = localStorage.getItem("idToken");
     if (!idToken) {
       setPreviewError("Not logged in. Please log in to view files.");
@@ -175,7 +334,6 @@ const DashboardPage: React.FC = () => {
       const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
       
       // Decrypt the data
-      const password = "myTestPassword123";
       const decryptedBuffer = await encryptionUtils.decryptData(
         encryptedData,
         password,
@@ -275,7 +433,7 @@ const DashboardPage: React.FC = () => {
         return;
       }
 
-      const password = "myTestPassword123";
+      const password = localStorage.getItem("masterPassword") || "myTestPassword123";
       const { salt, iv, encryptedData } = await encryptionUtils.encryptData(
         fileData,
         password
@@ -403,7 +561,9 @@ const DashboardPage: React.FC = () => {
       const encryptedData = base64ToArrayBuffer(encryptedPackage.encryptedData);
       
       // Step 4: Decrypt the data
-      const password = "myTestPassword123";
+      // Get the master password from localStorage
+      const password = localStorage.getItem("masterPassword") || "myTestPassword123";
+
       const decryptedBuffer = await encryptionUtils.decryptData(
         encryptedData,
         password,
@@ -567,7 +727,95 @@ const DashboardPage: React.FC = () => {
           </button>
         </div>
       </div>
+      {/* Create Password Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-md w-96">
+            <h2 className="text-xl font-bold mb-4">Create Master Password</h2>
+            <p className="text-gray-600 mb-4">
+              This password will be used to encrypt and decrypt all your files.
+              Please remember it - it cannot be recovered if lost.
+            </p>
+            
+            {passwordError && (
+              <div className="mb-4 text-red-500 text-sm">{passwordError}</div>
+            )}
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-1">Master Password</label>
+              <input
+                type="password"
+                value={masterPassword}
+                onChange={(e) => setMasterPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Enter password (min 8 characters)"
+              />
+            </div>
+            
+            <div className="mb-6">
+              <label className="block text-gray-700 mb-1">Confirm Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Confirm your password"
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={handleCreateMasterPassword}
+                disabled={isPasswordProcessing}
+                className={`px-4 py-2
+                  ${isPasswordProcessing ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}
+                  text-white rounded-md`}
+              >
+                {isPasswordProcessing ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* Enter Password Modal */}
+      {showEnterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-md w-96">
+            <h2 className="text-xl font-bold mb-4">Enter Master Password</h2>
+            <p className="text-gray-600 mb-4">
+              Please enter your master password to access your encrypted files.
+            </p>
+            
+            {passwordError && (
+              <div className="mb-4 text-red-500 text-sm">{passwordError}</div>
+            )}
+            
+            <div className="mb-6">
+              <label className="block text-gray-700 mb-1">Master Password</label>
+              <input
+                type="password"
+                value={masterPassword}
+                onChange={(e) => setMasterPassword(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                placeholder="Enter your master password"
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={handleVerifyMasterPassword}
+                disabled={isPasswordProcessing}
+                className={`px-4 py-2
+                  ${isPasswordProcessing ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"}
+                  text-white rounded-md`}
+              >
+                {isPasswordProcessing ? "Verifying..." : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Modal for Encryption */}
       {showEncryptModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">

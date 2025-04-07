@@ -55,6 +55,9 @@ func main() {
 	// New route for responding to MFA challenges
 	mux.HandleFunc("/respondMFA", respondMFAHandler)
 
+	// master password verification
+	mux.HandleFunc("/setMasterPassword", auth.SetMasterPassword)
+	mux.HandleFunc("/verifyMasterPassword", auth.VerifyMasterPassword)
 	// Protected routes
 	mux.HandleFunc("/verify", auth.TokenVerify)
 	mux.HandleFunc("/upload", auth.VerifyAndUpload)
