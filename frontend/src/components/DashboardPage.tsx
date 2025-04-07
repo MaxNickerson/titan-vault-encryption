@@ -107,13 +107,18 @@ const DashboardPage: React.FC = () => {
   };
 
   // Function to check if the master password test file exists
-  const checkMasterPasswordTestFile = async () => {
-    try {
+const checkMasterPasswordTestFile = async () => {
+  try {
+    // Get the stored files from state or fetch them if needed
+    let filesToCheck = userFiles;
+    
+    // If no files in state yet, fetch them directly
+    if (!filesToCheck || filesToCheck.length === 0) {
       const idToken = localStorage.getItem("idToken");
       if (!idToken) return false;
       
-      // Try to fetch the user's files
       const response = await fetch("http://localhost:8080/listObjects", {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${idToken}`
         }
@@ -121,18 +126,32 @@ const DashboardPage: React.FC = () => {
       
       if (!response.ok) return false;
       
-      const files = await response.json();
-      
-      // Check if any of the files is the master password test file
-      return files.some((file: any) => 
-        file.Key && typeof file.Key === 'string' && 
-        file.Key.endsWith('/master-password-test.txt')
-      );
-    } catch (error) {
-      console.error("Error checking for master password test file:", error);
-      return false;
+      const data = await response.json();
+      filesToCheck = data;
     }
-  };
+    
+    console.log("Files being checked for master password test:", filesToCheck);
+    
+    // Check if the master password test file exists in the list
+    const hasTestFile = filesToCheck.some((file: any) => {
+      const result = file.Key && 
+                    typeof file.Key === 'string' && 
+                    file.Key.includes('master-password-test.txt');
+      
+      if (result) {
+        console.log("Found master password test file:", file.Key);
+      }
+      
+      return result;
+    });
+    
+    console.log("Master password test file exists:", hasTestFile);
+    return hasTestFile;
+  } catch (error) {
+    console.error("Error checking for master password test file:", error);
+    return false;
+  }
+};
 
   // Fetch user files from the backend API
   const fetchUserFiles = async () => {
@@ -185,6 +204,54 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  // Update your useEffect for checking auth
+  useEffect(() => {
+    const token = localStorage.getItem("idToken");
+    if (!token) {
+      return navigate("/login");
+    }
+
+    const checkAuth = async () => {
+      try {
+        console.log("Starting auth check...");
+        
+        // Parse the JWT token to check the attribute (for debugging)
+        try {
+          const payload = JSON.parse(base64UrlDecode(token.split(".")[1]));
+          console.log("JWT Payload:", payload);
+          console.log("hasMasterPassword attribute:", payload["custom:hasMasterPassword"]);
+        } catch (e) {
+          console.error("Error parsing JWT:", e);
+        }
+        
+        // First check if the test file exists - most reliable method
+        console.log("Checking for master password test file...");
+        const hasMP = await checkMasterPasswordTestFile();
+        console.log("Master password test file check result:", hasMP);
+        
+        const storedPass = localStorage.getItem("masterPassword");
+        console.log("Master password in localStorage:", !!storedPass);
+
+        if (hasMP && storedPass) {
+          // User has master password and it's stored locally
+          console.log("Master password found in localStorage, proceeding normally");
+        } else if (hasMP) {
+          // User has set master password but it's not in localStorage
+          console.log("Master password exists but not in localStorage, showing enter modal");
+          setShowEnterModal(true);
+        } else {
+          // No master password set yet
+          console.log("No master password set, showing create modal");
+          setShowCreateModal(true);
+        }
+      } catch (err) {
+        console.error("Auth check error:", err);
+        navigate("/login");
+      }
+    };
+    
+    checkAuth();
+  }, [navigate]);
   // Check cache and fetch files on component mount
   useEffect(() => {
     const cachedData = sessionStorage.getItem("userFilesCache");
@@ -213,41 +280,6 @@ const DashboardPage: React.FC = () => {
     fetchUserFiles();
   }, []);
 
-  // ======================================
-  // [B] On mount => Check JWT & masterPassword
-  // ======================================
-  useEffect(() => {
-    const token = localStorage.getItem("idToken");
-    if (!token) {
-      return navigate("/login");
-    }
-
-    const checkAuth = async () => {
-      try {
-        // First check if the test file exists - most reliable method
-        const hasMP = await checkMasterPasswordTestFile();
-        const storedPass = localStorage.getItem("masterPassword");
-
-        if (hasMP && storedPass) {
-          // User has master password and it's stored locally
-          console.log("Master password found in localStorage");
-        } else if (hasMP) {
-          // User has set master password but it's not in localStorage
-          console.log("Master password exists but not in localStorage, showing enter modal");
-          setShowEnterModal(true);
-        } else {
-          // No master password set yet
-          console.log("No master password set, showing create modal");
-          setShowCreateModal(true);
-        }
-      } catch (err) {
-        console.error("Auth check error:", err);
-        navigate("/login");
-      }
-    };
-    
-    checkAuth();
-  }, [navigate]);
 
   // Function to create and store a new master password
   const handleCreateMasterPassword = async () => {
