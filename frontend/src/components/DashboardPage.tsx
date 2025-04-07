@@ -152,6 +152,61 @@ const checkMasterPasswordTestFile = async () => {
     return false;
   }
 };
+  // -----------------------------
+  // Delete the selected file
+  // -----------------------------
+  const handleDeleteFile = async () => {
+    if (!selectedItem) {
+      alert("Please select a file to delete.");
+      return;
+    }
+    
+    // Confirm before deletion
+    if (!confirm(`Are you sure you want to delete "${selectedItem.split('/').pop()}"?`)) {
+      return;
+    }
+    
+    const idToken = localStorage.getItem("idToken");
+    if (!idToken) {
+      console.error("No ID token found. User not logged in.");
+      alert("You must be logged in to delete files.");
+      navigate("/login");
+      return;
+    }
+    
+    try {
+      setIsPreviewLoading(true);
+      
+      const response = await fetch("http://localhost:8080/deleteObject", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ fileName: selectedItem }),
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Delete failed: ${errorText}`);
+      }
+      
+      // Close the preview
+      setSelectedItem(null);
+      
+      // Refresh the file list
+      fetchUserFiles();
+      
+      // Show success message
+      alert("File deleted successfully!");
+      
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Failed to delete file: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
 
   // Fetch user files from the backend API
   const fetchUserFiles = async () => {
@@ -812,65 +867,98 @@ const checkMasterPasswordTestFile = async () => {
           {/* RIGHT BOX: Only show if an item is selected */}
           {selectedItem && (
             <div className="bg-white p-6 rounded-lg shadow-md w-96 relative">
+            {/* Header actions */}
+            <div className="absolute top-2 right-2 flex space-x-2">
+              {/* Delete button */}
+              <button
+                onClick={handleDeleteFile}
+                disabled={isPreviewLoading}
+                className="text-red-600 hover:text-red-800 font-bold text-sm rounded px-2 py-1 hover:bg-red-100"
+                title="Delete file"
+              >
+                Delete
+              </button>
+              
               {/* Close button */}
               <button
                 onClick={handleClosePreview}
-                className="absolute top-2 right-2 font-bold text-gray-600 hover:text-black"
+                className="font-bold text-gray-600 hover:text-black"
+                title="Close preview"
               >
                 X
               </button>
-
-              <h2 className="text-xl font-semibold mb-4">File Preview</h2>
-              <p className="text-gray-700 break-words mb-3">
-                Selected: {selectedItem.split('/').pop() || selectedItem}
-              </p>
-              
-              {/* Preview content */}
-              <div className="my-4 border rounded-lg p-2 min-h-[200px] flex items-center justify-center">
-                {isPreviewLoading ? (
-                  <p className="text-gray-500">Loading preview...</p>
-                ) : previewError ? (
-                  <p className="text-red-500 text-sm">{previewError}</p>
-                ) : previewUrl ? (
-                  selectedItem.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
-                    <img
-                      src={previewUrl}
-                      alt="File preview"
-                      className="max-w-full max-h-[300px] object-contain"
-                    />
-                  ) : selectedItem.toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
-                    <video controls className="max-w-full max-h-[300px]">
-                      <source src={previewUrl} />
-                      Your browser does not support the video tag.
-                    </video>
-                  ) : (
-                    <div className="text-center">
-                      <p className="text-gray-600 mb-2">Preview not available</p>
-                      <p className="text-xs text-gray-500">This file type cannot be previewed</p>
-                    </div>
-                  )
-                ) : (
-                  <p className="text-gray-500">No preview available</p>
-                )}
-              </div>
-              
-              {/* Download button in the preview box */}
-              <button
-                onClick={handleDownload}
-                disabled={isPreviewLoading}
-                className={`mt-4 px-4 py-2 ${
-                  isPreviewLoading ? "bg-gray-400" : "bg-green-500 hover:bg-green-600"
-                } text-white rounded-lg transition w-full flex items-center justify-center`}
-              >
-                {isPreviewLoading ? (
-                  <>
-                    <span className="mr-2">Processing...</span>
-                  </>
-                ) : (
-                  "Download & Decrypt"
-                )}
-              </button>
             </div>
+        
+            <h2 className="text-xl font-semibold mb-4">File Preview</h2>
+            <p className="text-gray-700 break-words mb-3">
+              Selected: {selectedItem.split('/').pop() || selectedItem}
+            </p>
+            
+            {/* Preview content */}
+            <div className="my-4 border rounded-lg p-2 min-h-[200px] flex items-center justify-center">
+              {isPreviewLoading ? (
+                <p className="text-gray-500">Loading preview...</p>
+              ) : previewError ? (
+                <p className="text-red-500 text-sm">{previewError}</p>
+              ) : previewUrl ? (
+                selectedItem.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)$/) ? (
+                  <img
+                    src={previewUrl}
+                    alt="File preview"
+                    className="max-w-full max-h-[300px] object-contain"
+                  />
+                ) : selectedItem.toLowerCase().match(/\.(mp4|webm|ogg)$/) ? (
+                  <video controls className="max-w-full max-h-[300px]">
+                    <source src={previewUrl} />
+                    Your browser does not support the video tag.
+                  </video>
+                ) : selectedItem.toLowerCase().match(/\.(mp3|wav|ogg|flac)$/) ? (
+                  <audio controls className="w-full">
+                    <source src={previewUrl} />
+                    Your browser does not support the audio tag.
+                  </audio>
+                ) : selectedItem.toLowerCase().match(/\.(pdf)$/) ? (
+                  <iframe 
+                    src={previewUrl} 
+                    className="w-full h-[300px]"
+                    title="PDF Preview"
+                  ></iframe>
+                ) : selectedItem.toLowerCase().match(/\.(txt|md|js|jsx|ts|tsx|html|css|json)$/) ? (
+                  <div className="w-full h-[300px] overflow-auto p-2 text-sm font-mono bg-gray-50">
+                    <iframe 
+                      src={previewUrl} 
+                      className="w-full h-full border-0"
+                      title="Text Preview"
+                    ></iframe>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-gray-600 mb-2">Preview not available</p>
+                    <p className="text-xs text-gray-500">Click "Download & Decrypt" to access this file</p>
+                  </div>
+                )
+              ) : (
+                <p className="text-gray-500">No preview available</p>
+              )}
+            </div>
+            
+            {/* Download button in the preview box */}
+            <button
+              onClick={handleDownload}
+              disabled={isPreviewLoading}
+              className={`mt-4 px-4 py-2 ${
+                isPreviewLoading ? "bg-gray-400" : "bg-green-500 hover:bg-green-600"
+              } text-white rounded-lg transition w-full flex items-center justify-center`}
+            >
+              {isPreviewLoading ? (
+                <>
+                  <span className="mr-2">Processing...</span>
+                </>
+              ) : (
+                "Download & Decrypt"
+              )}
+            </button>
+          </div>
           )}
         </div>
 

@@ -257,88 +257,38 @@ func ListUserObjects(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(ArrObjects)
 }
 
-// // SetMasterPassword stores a test file encrypted with the master password and updates the user attribute
-// func SetMasterPassword(w http.ResponseWriter, r *http.Request) {
-// 	// Verify token
-// 	authHeader := r.Header.Get("Authorization")
-// 	payload := verifyJWT(w, authHeader)
-// 	if payload == nil {
-// 		return
-// 	}
+func DeleteObject(w http.ResponseWriter, r *http.Request) {
+	s3Service, err := url.NewR2Service()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-// 	// Get sub from token
-// 	sub, err := payload.GetSubject()
-// 	if err != nil {
-// 		http.Error(w, fmt.Sprintf("No sub in token: %v", err), http.StatusUnauthorized)
-// 		return
-// 	}
+	authHeader := r.Header.Get("Authorization")
+	payload := verifyJWT(w, authHeader)
+	if payload == nil {
+		return
+	}
 
-// 	// Parse request
-// 	var req EncryptedPackage
-// 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-// 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-// 		return
-// 	}
+	// create a struct of what the request should look like
+	var body struct {
+		FileName string `json:"fileName"`
+	}
 
-// 	// Create S3 service
-// 	s3Service, err := url.NewR2Service()
-// 	if err != nil {
-// 		http.Error(w, "Failed to create storage service", http.StatusInternalServerError)
-// 		return
-// 	}
+	// create a json decoder
+	dec := json.NewDecoder(r.Body)
 
-// 	// Store test file in bucket
-// 	var network bytes.Buffer
-// 	enc := gob.NewEncoder(&network)
-// 	err = enc.Encode(req)
-// 	if err != nil {
-// 		http.Error(w, "Failed to encode data", http.StatusInternalServerError)
-// 		return
-// 	}
+	if err := dec.Decode(&body); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
 
-// 	// Upload to special location - using master-password-test as filename
-// 	err = s3Service.UploadFileToR2(context.TODO(), sub+"/master-password-test.txt", network.Bytes())
-// 	if err != nil {
-// 		http.Error(w, "Failed to store test file", http.StatusInternalServerError)
-// 		return
-// 	}
+	response, err := s3Service.RemoveObject(context.TODO(), body.FileName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Object removal error %v", err), http.StatusInternalServerError)
+	}
 
-// 	// Update Cognito user attribute
-// 	userPoolID := os.Getenv("COGNITO_USER_POOL_ID")
-// 	region := os.Getenv("AWS_REGION")
-
-// 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-// 	if err != nil {
-// 		http.Error(w, "Failed to load AWS config", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	// Initialize Cognito client
-// 	cognito := cognitoidentityprovider.NewFromConfig(cfg)
-
-// 	// Update the user's attribute
-// 	_, err = cognito.AdminUpdateUserAttributes(context.TODO(), &cognitoidentityprovider.AdminUpdateUserAttributesInput{
-// 		UserPoolId: aws.String(userPoolID),
-// 		Username:   aws.String(sub),
-// 		UserAttributes: []types.AttributeType{
-// 			{
-// 				Name:  aws.String("custom:hasMasterPassword"),
-// 				Value: aws.String("true"),
-// 			},
-// 		},
-// 	})
-
-// 	if err != nil {
-// 		http.Error(w, "Failed to update user attribute", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	// Return success
-// 	w.WriteHeader(http.StatusOK)
-// 	json.NewEncoder(w).Encode(map[string]string{
-// 		"message": "Master password set successfully",
-// 	})
-// }
+	json.NewEncoder(w).Encode(response)
+}
 
 // VerifyMasterPassword validates if the provided master password can decrypt the test file
 func VerifyMasterPassword(w http.ResponseWriter, r *http.Request) {

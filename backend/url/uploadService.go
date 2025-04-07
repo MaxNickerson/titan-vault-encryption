@@ -167,3 +167,19 @@ func (s *S3Service) GetObject(ctx context.Context, obj_name string) (*EncryptedP
 	return &encPkg, nil
 
 }
+
+func (s *S3Service) RemoveObject(ctx context.Context, obj_name string) (string, error) {
+	DeleteObjectinput := &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(obj_name),
+	}
+
+	_, err := s.s3Client.DeleteObject(ctx, DeleteObjectinput)
+	if err != nil {
+		return "", err
+	}
+
+	response := "Successfully Deleted " + obj_name
+
+	return response, nil
+}
