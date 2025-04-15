@@ -5,6 +5,8 @@ import {EncryptionUtils} from "../encryption/encryptionUtils"
 const EncryptionPage = () => {
   const [fileData, setFileData] = useState<ArrayBuffer | null>(null);
   const [fileName, setFileName] = useState("");
+  const [userSub, setSub] = useState("");
+  const [uploadedFilePath, setUploadedFilePath] = useState<string | null>(null);
   const [fileType, setFileType] = useState("");
   const [encryptedPackage, setEncryptedPackage] = useState<{
     iv: string;
@@ -142,6 +144,11 @@ const EncryptionPage = () => {
       
       const data = await response.json();
       console.log("Upload successful:", data);
+      setSub(data.sub)
+      const fullPath = `${data.sub}/${fileName}`;
+      setUploadedFilePath(fullPath);
+      // Show a success message
+      alert(`File uploaded successfully! Click "Decrypt File" to download it.`);
       // data might contain your "sub" or any server response
     } catch (error) {
       console.error("Encryption/Upload error:", error);
@@ -156,9 +163,14 @@ const EncryptionPage = () => {
       console.error("No ID Token found in local storage.");
       return
     }
-    const fileName = "04d8f4b8-1041-70e4-4a2a-fcb5edf1969b/HGIH WUALITY PFP.jpg"
+
+    if (!uploadedFilePath) {
+      alert("No file was uploaded. Please upload a file first.");
+      return;
+    }
+
     const packageData = {
-      fileName
+      fileName: uploadedFilePath
     };
   
     // Convert the stored Base64 values back to ArrayBuffers/Uint8Arrays
