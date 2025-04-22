@@ -12,4 +12,4 @@
 
 .bg-gradient-custom {
     @apply bg-gradient-to-b from-blue-200 to-gray-300;
-  }
+}
